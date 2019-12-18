@@ -362,34 +362,42 @@ architecture struct of datapath is
   end component;
   signal writereg:           STD_LOGIC_VECTOR(4 downto 0);
   signal pcjump, pcnext,
-         pcnextbr, pcplus4,
+         pcnextbr, PCPlus4F,
          pcbranch:           STD_LOGIC_VECTOR(31 downto 0);
-  signal signimm, signimmsh: STD_LOGIC_VECTOR(31 downto 0);
-  signal srca, srcb, result: STD_LOGIC_VECTOR(31 downto 0);
+  signal SignImmD, signimmsh: STD_LOGIC_VECTOR(31 downto 0);
+  signal SrcAD, srcb, result: STD_LOGIC_VECTOR(31 downto 0);
+  signal InstrD: STD_LOGIC_VECTOR(31 downto 0);
 begin
-  -- next PC logic
-  pcjump <= pcplus4(31 downto 28) & instr(25 downto 0) & "00";
-  pcreg: flopr generic map(32) port map(clk, reset, pcnext, pc);
-  pcadd1: adder port map(pc, X"00000004", pcplus4);
-  immsh: sl2 port map(signimm, signimmsh);
-  pcadd2: adder port map(pcplus4, signimmsh, pcbranch);
-  pcbrmux: mux2 generic map(32) port map(pcplus4, pcbranch,
-                                         pcsrc, pcnextbr);
+
+  -- IF
+
+  pcbrmux: mux2 generic map(32) port map(PCPlus4F, pcbranch, pcsrc, pcnextbr);
+  pcjump <= PCPlus4D(31 downto 28) & instr(25 downto 0) & "00";
   pcmux: mux2 generic map(32) port map(pcnextbr, pcjump, jump, pcnext);
+  pcreg: flopr generic map(32) port map(clk, reset, pcnext, PCF);
+  pc <= PCF;
+  pcadd1: adder port map(PCF, X"00000004", PCPlus4F);
+
+  regpipe1: regaux generic map(32) port map(clk, instr, PCPlus4F, InstrD, PCPlus4D)
+ 
+  -- ID
+  
+  rf: regfile port map(clk, regwrite, InstrD(25 downto 21),
+    InstrD(20 downto 16), writereg, result, SrcAD, WriteDataD);
+  se: signext port map(InstrD(15 downto 0), SignImmD);
+
+  -- next PC logic
+  immsh: sl2 port map(SignImmD, signimmsh);
+  pcadd2: adder port map(PCPlus4D, signimmsh, pcbranch);
 
   -- register file logic
-  rf: regfile port map(clk, regwrite, instr(25 downto 21),
-                       instr(20 downto 16), writereg, result, srca,
-				writedata);
-  wrmux: mux2 generic map(5) port map(instr(20 downto 16),
-                                      instr(15 downto 11),
-                                      regdst, writereg);
-  resmux: mux2 generic map(32) port map(aluout, readdata,
-                                        memtoreg, result);
-  se: signext port map(instr(15 downto 0), signimm);
 
+  wrmux: mux2 generic map(5) port map(InstrD(20 downto 16), 
+    InstrD(15 downto 11), regdst, writereg);
+  resmux: mux2 generic map(32) port map(aluout, readdata, memtoreg, result);
+  
   -- ALU logic
-  srcbmux: mux2 generic map(32) port map(writedata, signimm, alusrc,
+  srcbmux: mux2 generic map(32) port map(WriteDataD, SignImmD, alusrc,
                                          srcb);
   mainalu: alu port map(srca, srcb, alucontrol, aluout, zero);
 end;
@@ -531,3 +539,33 @@ begin
 
   zero <= '1' when result = X"00000000" else '0';
 end;
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+-- Auxiliar register 1 - IF stage to ID stage
+
+Entity regaux1 is
+  Generic(W : integer);
+  Port (clk         : in std_logic;
+
+        RD          : in std_logic_vector(W-1 downto 0);
+
+        PCPlus4F    : in std_logic_vector(W-1 downto 0);
+        
+        InstrD      : out std_logic_vector(W-1 downto 0);
+        
+        PCPlus4D    : out std_logic_vector(W-1 downto 0));
+  End;
+
+Architecture behave of regaux1 is
+  begin
+    process(clk)
+    begin
+      if( clk'event and clk = '1') then
+        InstrD <= RD;
+        
+        PCPlus4D <= PCPlus4F;
+      end if;
+    end process;
+  end;
