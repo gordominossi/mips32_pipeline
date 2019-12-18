@@ -263,11 +263,13 @@ architecture behave of maindec is
 begin
   process(all) begin
     case op is
-      when "000000" => controls <= "110000010"; -- RTYPE
+      when "000000" => controls <= "110000011"; -- RTYPE
       when "100011" => controls <= "101001000"; -- LW
       when "101011" => controls <= "001010000"; -- SW
       when "000100" => controls <= "000100001"; -- BEQ
+      when "000101" => controls <= "000100001"; -- BNE
       when "001000" => controls <= "101000000"; -- ADDI
+      when "001101" => controls <= "101000010"; -- ORI
       when "000010" => controls <= "000000100"; -- J
       when others   => controls <= "---------"; -- illegal op
     end case;
@@ -292,8 +294,9 @@ architecture behave of aludec is
 begin
   process(all) begin
     case aluop is
-      when "00" => alucontrol <= "010"; -- add (for lw/sw/addi)
-      when "01" => alucontrol <= "110"; -- sub (for beq)
+      when "00" => alucontrol <= "010"; -- add (for lw/sw/addi/j)
+      when "01" => alucontrol <= "110"; -- sub (for beq/bne)
+      when "10" => alucontrol <= "001"; -- or (for ori)
       when others => case funct is      -- R-type instructions
                          when "100000" => alucontrol <= "010"; -- add
                          when "100010" => alucontrol <= "110"; -- sub
