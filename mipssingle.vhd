@@ -191,6 +191,7 @@ architecture struct of mips is
          memtoreg, pcsrc:   in  STD_LOGIC;
          alusrc, regdst:    in  STD_LOGIC;
          regwrite, jump:    in  STD_LOGIC;
+         MemWriteD:         in  STD_LOGIC;
          alucontrol:        in  STD_LOGIC_VECTOR(2 downto 0);
          zero:              out STD_LOGIC;
          pc:                buffer STD_LOGIC_VECTOR(31 downto 0);
@@ -206,7 +207,7 @@ begin
                             zero, memtoreg, memwrite, pcsrc, alusrc,
                             regdst, regwrite, jump, alucontrol);
   dp: datapath port map(clk, reset, memtoreg, pcsrc, alusrc, regdst,
-                        regwrite, jump, alucontrol, zero, pc, instr,
+                        regwrite, jump, memwrite, alucontrol, zero, pc, instr,
                         aluout, writedata, readdata);
 end;
 
@@ -316,6 +317,7 @@ entity datapath is  -- MIPS datapath
        memtoreg, pcsrc:   in  STD_LOGIC;
        alusrc, regdst:    in  STD_LOGIC;
        regwrite, jump:    in  STD_LOGIC;
+       MemWriteD:         in  STD_LOGIC;
        alucontrol:        in  STD_LOGIC_VECTOR(2 downto 0);
        zero:              out STD_LOGIC;
        pc:                buffer STD_LOGIC_VECTOR(31 downto 0);
@@ -360,13 +362,27 @@ architecture struct of datapath is
          s:      in  STD_LOGIC;
          y:      out STD_LOGIC_VECTOR(width-1 downto 0));
   end component;
-  signal writereg:           STD_LOGIC_VECTOR(4 downto 0);
+
   signal pcjump, pcnext,
          pcnextbr, PCPlus4F,
-         pcbranch:           STD_LOGIC_VECTOR(31 downto 0);
-  signal SignImmD, signimmsh: STD_LOGIC_VECTOR(31 downto 0);
-  signal SrcAD, srcb, result: STD_LOGIC_VECTOR(31 downto 0);
-  signal InstrD: STD_LOGIC_VECTOR(31 downto 0);
+         pcbranch, PCF:        STD_LOGIC_VECTOR(31 downto 0);
+
+  signal SignImmD, SrcAD, 
+         WriteDataD, InstrD:   STD_LOGIC_VECTOR(31 downto 0);
+
+  signal RegWriteE, MemToRegE,
+         MemWriteE, JumpE,
+         PCSrcE, ALUControlE,
+         ALUSrcE, RegDstE,
+         ZeroE:                STD_LOGIC;
+  signal SrcAE, SrcBE,
+         WriteDataE, SignImmE,
+         SignImmShE, PCPlus4E,
+         PCBranchE:            STD_LOGIC_VECTOR(31 downto 0);
+  signal RtE, RdE, WriteRegE:  STD_LOGIC_VECTOR(4 downto 0);
+
+  signal result:               STD_LOGIC_VECTOR(31 downto 0);
+
 begin
 
   -- IF
@@ -382,24 +398,33 @@ begin
  
   -- ID
   
-  rf: regfile port map(clk, regwrite, InstrD(25 downto 21),
-    InstrD(20 downto 16), writereg, result, SrcAD, WriteDataD);
+  rf: regfile port map(
+    clk, regwrite, InstrD(25 downto 21),
+    InstrD(20 downto 16), writereg, result, SrcAD, WriteDataD
+  );
   se: signext port map(InstrD(15 downto 0), SignImmD);
 
-  -- next PC logic
-  immsh: sl2 port map(SignImmD, signimmsh);
-  pcadd2: adder port map(PCPlus4D, signimmsh, pcbranch);
+  regpipe2: regaux2 generic map(32) port map(
+    regwrite, memtoreg, memwrite, jump, pcsrc, alucontrol, alusrc, regdst,
+    SrcAD, WriteDataD, InstrD(20 downto 16), InstrD(15 downto 11), SignImmD, PCPlus4D,
+    RegWriteE, MemToRegE, MemWriteE, JumpE, PCSrcE, ALUControlE, ALUSrcE, RegDstE,
+    SrcAE, WriteDataE, RtE, RdE, SignImmE, PCPlus4E
+  );
+
+  -- EX
+
+  srcbmux: mux2 generic map(32) port map(WriteDataD, SignImmD, alusrc, SrcBE);
+  mainalu: alu port map(SrcAE, SrcBE, ALUControlE, ALUOutE, ZeroE);
+
+  wrmux: mux2 generic map(5) port map(RtE, rdE, RegDstE, WriteRegE);
+
+  immsh: sl2 port map(SignImmD, SignImmShE);
+  pcadd2: adder port map(PCPlus4D, SignImmShE, PCBranchE);
 
   -- register file logic
 
-  wrmux: mux2 generic map(5) port map(InstrD(20 downto 16), 
-    InstrD(15 downto 11), regdst, writereg);
   resmux: mux2 generic map(32) port map(aluout, readdata, memtoreg, result);
-  
-  -- ALU logic
-  srcbmux: mux2 generic map(32) port map(WriteDataD, SignImmD, alusrc,
-                                         srcb);
-  mainalu: alu port map(srca, srcb, alucontrol, aluout, zero);
+ 
 end;
 
 library IEEE; use IEEE.STD_LOGIC_1164.all;
@@ -569,3 +594,66 @@ Architecture behave of regaux1 is
       end if;
     end process;
   end;
+
+-- Auxiliar register 2 - ID stage to EX stage
+
+Entity regaux2 is
+  Generic(W : integer);
+  Port (clk           : in std_logic;
+        RegWriteD   : in std_logic;
+        MemtoRegD   : in std_logic;
+        MemWriteD   : in std_logic;
+        JumpD       : in std_logic;
+        PCSrcD      : in std_logic;
+        ALUControlD : in std_logic_vector(2 downto 0);
+        ALUSrcD     : in std_logic;
+        RegDstD     : in std_logic;
+
+        RD1         : in std_logic_vector(W-1 downto 0);
+        RD2         : in std_logic_vector(W-1 downto 0);
+        RtD         : in std_logic_vector(4 downto 0);
+        RdD         : in std_logic_vector(4 downto 0);
+        SignImmD    : in std_logic_vector(W-1 downto 0);
+        PCPlus4D    : in std_logic_vector(W-1 downto 0);
+        
+        RegWriteE   : out std_logic;
+        MemtoRegE   : out std_logic;
+        MemWriteE   : out std_logic;
+        JumpE       : in std_logic;
+        PCSrcE      : in std_logic;
+        ALUControlE : out std_logic_vector(2 downto 0);
+        ALUSrcE     : out std_logic;
+        RegDstE     : out std_logic;
+
+        SrcAE       : out std_logic_vector(W-1 downto 0);
+        WriteDataE  : out std_logic_vector(W-1 downto 0);
+        RtE         : out std_logic_vector(4 downto 0);
+        RdE         : out std_logic_vector(4 downto 0);
+        SignImmE    : out std_logic_vector(W-1 downto 0);
+        PCPlus4E    : out std_logic_vector(W-1 downto 0));
+End;
+
+Architecture behave of regaux2 is
+begin
+  process(clk)
+  begin
+    if( clk'event and clk = '1') then
+      RegWriteE <= RegWriteD;
+      MemtoRegE <= MemtoRegD;
+      MemWriteE <= MemWriteD;
+      JumpE <= JumpD;
+      PCSrcE <= JumpD;
+      BranchE <= BranchD;
+      ALUControlE <= ALUControlD;
+      ALUSrcE <= ALUSrcD;
+      RegDstE <= RegDstD;
+
+      SrcAE <= RD1;
+      WriteDataE <= RD2;
+      RtE <= RtD;
+      RdE <= RdD;
+      SignImmE <= SignImmD;
+      PCPlus4E <= PCPlus4D;
+    end if;
+  end process;
+end;
