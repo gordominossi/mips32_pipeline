@@ -375,11 +375,18 @@ architecture struct of datapath is
          PCSrcE, ALUControlE,
          ALUSrcE, RegDstE,
          ZeroE:                STD_LOGIC;
-  signal SrcAE, SrcBE,
+  signal SrcAE, SrcBE, ALUOutE,
          WriteDataE, SignImmE,
          SignImmShE, PCPlus4E,
          PCBranchE:            STD_LOGIC_VECTOR(31 downto 0);
   signal RtE, RdE, WriteRegE:  STD_LOGIC_VECTOR(4 downto 0);
+
+  signal ALUOutM, WriteDataM,
+         PCBranchM:            STD_LOGIC_VECTOR(31 downto 0);
+  signal WriteRegM:            STD_LOGIC_VECTOR(4 downto 0);
+  signal ZeroM, RegWriteM,
+         MemToRegM, MemWriteM, 
+         JumpM, PCSrcM:        STD_LOGIC;
 
   signal result:               STD_LOGIC_VECTOR(31 downto 0);
 
@@ -404,7 +411,7 @@ begin
   );
   se: signext port map(InstrD(15 downto 0), SignImmD);
 
-  regpipe2: regaux2 generic map(32) port map(
+  regpipe2: regaux2 generic map(32) port map(clk,
     regwrite, memtoreg, memwrite, jump, pcsrc, alucontrol, alusrc, regdst,
     SrcAD, WriteDataD, InstrD(20 downto 16), InstrD(15 downto 11), SignImmD, PCPlus4D,
     RegWriteE, MemToRegE, MemWriteE, JumpE, PCSrcE, ALUControlE, ALUSrcE, RegDstE,
@@ -420,6 +427,13 @@ begin
 
   immsh: sl2 port map(SignImmD, SignImmShE);
   pcadd2: adder port map(PCPlus4D, SignImmShE, PCBranchE);
+
+  regpipe3: regaux3 generic map(32) port map(clk,
+    RegWriteE, MemToRegE, MemWriteE, JumpE, PCSrcE,
+    ZeroE, ALUOutE, WriteDataE, WriteRegE, PcBranchE,
+    RegWriteM, MemToRegM, MemWriteM, JumpM, PCSrcM,
+    ZeroM, ALUOutM, WriteDataM, WriteRegM, PcBranchM
+  );
 
   -- register file logic
 
@@ -657,3 +671,53 @@ begin
     end if;
   end process;
 end;
+
+-- Auxiliar register 3 - EX stage to MEM stage
+
+Entity regaux3 is
+  Generic(W : integer);
+  Port (clk           : in std_logic;
+        RegWriteE     : in std_logic;
+        MemtoRegE     : in std_logic;
+        MemWriteE     : in std_logic;
+        JumpE         : in std_logic;
+        PCSrcE        : in std_logic;
+        
+        ZeroE         : in std_logic;
+        ALUOutE       : in std_logic_vector(W-1 downto 0);
+        WriteDataE    : in std_logic_vector(W-1 downto 0);
+        WriteRegE     : in std_logic_vector(4 downto 0);
+        PcBranchE     : in std_logic_vector(W-1 downto 0);
+        
+        RegWriteM     : out std_logic;
+        MemtoRegM     : out std_logic;
+        MemWriteM     : out std_logic;
+        JumpM         : out std_logic;
+        PCSrcM        : out std_logic;
+        
+        ZeroM         : out std_logic;
+        ALUOutM       : out std_logic_vector(W-1 downto 0);
+        WriteDataM    : out std_logic_vector(W-1 downto 0);
+        WriteRegM     : out std_logic_vector(4 downto 0);
+        PcBranchM     : out std_logic_vector(W-1 downto 0));
+  end;
+
+Architecture behave of regaux3 is
+  begin
+    process(clk)
+    begin
+      if( clk'event and clk = '1') then
+        RegWriteM  <= RegWriteE;
+        MemtoRegM  <= MemtoRegE;
+        MemWriteM  <= MemWriteE;
+        JumpM      <= JumpE;
+        PCSrcM     <= PCSrcE;
+        
+        ZeroM      <= ZeroE;
+        AluOutM    <= AluOutE;
+        WriteDataM <= WriteDataE;
+        WriteRegM  <= WriteRegE;
+        PcBranchM  <= PcBranchE;
+      end if;
+    end process;
+  end;
