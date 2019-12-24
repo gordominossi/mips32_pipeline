@@ -181,33 +181,35 @@ architecture struct of mips is
     port(op, funct:          in  STD_LOGIC_VECTOR(5 downto 0);
          zero:               in  STD_LOGIC;
          memtoreg, memwrite: out STD_LOGIC;
-         pcsrc, alusrc:      out STD_LOGIC;
+         alusrc:             out STD_LOGIC;
          regdst, regwrite:   out STD_LOGIC;
          jump:               out STD_LOGIC;
+         Branch, Branch_NE:  out STD_LOGIC;
          alucontrol:         out STD_LOGIC_VECTOR(2 downto 0));
   end component;
   component datapath
     port(clk, reset:        in  STD_LOGIC;
-         memtoreg, pcsrc:   in  STD_LOGIC;
-         alusrc, regdst:    in  STD_LOGIC;
-         regwrite, jump:    in  STD_LOGIC;
-         MemWriteD:         in  STD_LOGIC;
-         alucontrol:        in  STD_LOGIC_VECTOR(2 downto 0);
-         zero:              out STD_LOGIC;
-         pc:                buffer STD_LOGIC_VECTOR(31 downto 0);
-         instr:             in STD_LOGIC_VECTOR(31 downto 0);
-         aluout, writedata: buffer STD_LOGIC_VECTOR(31 downto 0);
-         readdata:          in  STD_LOGIC_VECTOR(31 downto 0));
+      memtoreg:          in  STD_LOGIC;
+      alusrc, regdst:    in  STD_LOGIC;
+      regwrite, jump:    in  STD_LOGIC;
+      Branch, Branch_NE: in  STD_LOGIC;
+      MemWriteD:         in  STD_LOGIC;
+      alucontrol:        in  STD_LOGIC_VECTOR(2 downto 0);
+      zero:              out STD_LOGIC;
+      pc:                buffer STD_LOGIC_VECTOR(31 downto 0);
+      instr:             in  STD_LOGIC_VECTOR(31 downto 0);
+      aluout, writedata: buffer STD_LOGIC_VECTOR(31 downto 0);
+      readdata:          in  STD_LOGIC_VECTOR(31 downto 0));
   end component;
-  signal memtoreg, alusrc, regdst, regwrite, jump, pcsrc: STD_LOGIC;
+  signal memtoreg, alusrc, regdst, regwrite, jump, Branch, Branch_NE: STD_LOGIC;
   signal zero: STD_LOGIC;
   signal alucontrol: STD_LOGIC_VECTOR(2 downto 0);
 begin
   cont: controller port map(instr(31 downto 26), instr(5 downto 0),
-                            zero, memtoreg, memwrite, pcsrc, alusrc,
-                            regdst, regwrite, jump, alucontrol);
-  dp: datapath port map(clk, reset, memtoreg, pcsrc, alusrc, regdst,
-                        regwrite, jump, memwrite, alucontrol, zero, pc, instr,
+                            zero, memtoreg, memwrite, alusrc,
+                            regdst, regwrite, jump, Branch, Branch_NE, alucontrol);
+  dp: datapath port map(clk, reset, memtoreg, alusrc, regdst,
+                        regwrite, jump, Branch, Branch_NE, memwrite, alucontrol, zero, pc, instr,
                         aluout, writedata, readdata);
 end;
 
@@ -217,9 +219,10 @@ entity controller is -- single cycle control decoder
   port(op, funct:          in  STD_LOGIC_VECTOR(5 downto 0);
        zero:               in  STD_LOGIC;
        memtoreg, memwrite: out STD_LOGIC;
-       pcsrc, alusrc:      out STD_LOGIC;
+       alusrc:             out STD_LOGIC;
        regdst, regwrite:   out STD_LOGIC;
        jump:               out STD_LOGIC;
+       Branch, Branch_NE:  out STD_LOGIC;
        alucontrol:         out STD_LOGIC_VECTOR(2 downto 0));
 end;
 
@@ -245,8 +248,6 @@ begin
                        alusrc, regdst, regwrite, jump, aluop);
   ad: aludec port map(funct, aluop, alucontrol);
 
-  --TODO: move pcsrc from control to datapath
-  pcsrc <= branch and zero or branch_ne and not zero;
 end;
 
 library IEEE; use IEEE.STD_LOGIC_1164.all;
@@ -279,7 +280,7 @@ begin
 
   -- (regwrite, regdst, alusrc, branch, branch_ne, memwrite,
   --  memtoreg, jump, aluop(1 downto 0)) <= controls;
- (RegWrite, RegDst, ALUSrc, Branch, branch_NE, MemWrite,
+ (RegWrite, RegDst, ALUSrc, Branch, Branch_NE, MemWrite,
   MemToReg, Jump) <= controls(9 downto 2);
   ALUOp <= controls(1 downto 0);
 end;
@@ -315,9 +316,10 @@ library IEEE; use IEEE.STD_LOGIC_1164.all; use IEEE.STD_LOGIC_ARITH.all;
 
 entity datapath is  -- MIPS datapath
   port(clk, reset:        in  STD_LOGIC;
-       memtoreg, pcsrc:   in  STD_LOGIC;
+       memtoreg:          in  STD_LOGIC;
        alusrc, regdst:    in  STD_LOGIC;
        regwrite, jump:    in  STD_LOGIC;
+       Branch, Branch_NE: in  STD_LOGIC;
        MemWriteD:         in  STD_LOGIC;
        alucontrol:        in  STD_LOGIC_VECTOR(2 downto 0);
        zero:              out STD_LOGIC;
@@ -398,7 +400,6 @@ begin
   -- IF
 
   pcbrmux: mux2 generic map(32) port map(PCPlus4F, PCBranchM, PCSrcM, pcnextbr);
-  --TODO: move PCBranch from control to datapath
   pcjump <= PCPlus4D(31 downto 28) & InstrD(25 downto 0) & "00";
   pcmux: mux2 generic map(32) port map(pcnextbr, pcjump, jump, pcnext);
   pcreg: flopr generic map(32) port map(clk, reset, pcnext, PCF);
@@ -416,9 +417,9 @@ begin
   se: signext port map(InstrD(15 downto 0), SignImmD);
 
   regpipe2: regaux2 generic map(32) port map(clk,
-    regwrite, memtoreg, memwrite, jump, pcsrc, alucontrol, alusrc, regdst,
+    regwrite, memtoreg, memwrite, Branch, Branch_NE, alucontrol, alusrc, regdst,
     SrcAD, WriteDataD, InstrD(20 downto 16), InstrD(15 downto 11), SignImmD, PCPlus4D,
-    RegWriteE, MemToRegE, MemWriteE, JumpE, PCSrcE, ALUControlE, ALUSrcE, RegDstE,
+    RegWriteE, MemToRegE, MemWriteE, BranchE, Branch_NEE, ALUControlE, ALUSrcE, RegDstE,
     SrcAE, WriteDataE, RtE, RdE, SignImmE, PCPlus4E
   );
 
@@ -433,13 +434,15 @@ begin
   pcadd2: adder port map(PCPlus4D, SignImmShE, PCBranchE);
 
   regpipe3: regaux3 generic map(32) port map(clk,
-    RegWriteE, MemToRegE, MemWriteE, JumpE, PCSrcE,
-    ZeroE, ALUOutE, WriteDataE, WriteRegE, PcBranchE,
-    RegWriteM, MemToRegM, MemWriteM, JumpM, PCSrcM,
-    ZeroM, ALUOutM, WriteDataM, WriteRegM, PcBranchM
+    RegWriteE, MemToRegE, MemWriteE, BranchE, Branch_NEE,
+    ZeroE, ALUOutE, WriteDataE, WriteRegE, PCBranchE,
+    RegWriteM, MemToRegM, MemWriteM, BranchM, Branch_NEM,
+    ZeroM, ALUOutM, WriteDataM, WriteRegM, PCBranchM
   );
 
   -- MEM
+
+  PCSrcM <= BranchM and ZeroM or Branch_NEM and not ZeroM
 
   regpipe4: regaux4 generic map(32) port map(clk,
     RegWriteM, MemToRegM,
@@ -630,8 +633,8 @@ Entity regaux2 is
         RegWriteD   : in std_logic;
         MemtoRegD   : in std_logic;
         MemWriteD   : in std_logic;
-        JumpD       : in std_logic;
-        PCSrcD      : in std_logic;
+        BranchD     : in std_logic;
+        Branch_NED  : in std_logic;
         ALUControlD : in std_logic_vector(2 downto 0);
         ALUSrcD     : in std_logic;
         RegDstD     : in std_logic;
@@ -646,8 +649,8 @@ Entity regaux2 is
         RegWriteE   : out std_logic;
         MemtoRegE   : out std_logic;
         MemWriteE   : out std_logic;
-        JumpE       : in std_logic;
-        PCSrcE      : in std_logic;
+        BranchE     : out std_logic;
+        Branch_NEE  : out std_logic;
         ALUControlE : out std_logic_vector(2 downto 0);
         ALUSrcE     : out std_logic;
         RegDstE     : out std_logic;
@@ -665,22 +668,21 @@ begin
   process(clk)
   begin
     if( clk'event and clk = '1') then
-      RegWriteE <= RegWriteD;
-      MemtoRegE <= MemtoRegD;
-      MemWriteE <= MemWriteD;
-      JumpE <= JumpD;
-      PCSrcE <= JumpD;
-      BranchE <= BranchD;
+      RegWriteE   <= RegWriteD;
+      MemtoRegE   <= MemtoRegD;
+      MemWriteE   <= MemWriteD;
+      BranchE     <= BranchD;
+      Branch_NEE  <= Branch_NED
       ALUControlE <= ALUControlD;
-      ALUSrcE <= ALUSrcD;
-      RegDstE <= RegDstD;
+      ALUSrcE     <= ALUSrcD;
+      RegDstE     <= RegDstD;
 
-      SrcAE <= RD1;
+      SrcAE      <= RD1;
       WriteDataE <= RD2;
-      RtE <= RtD;
-      RdE <= RdD;
-      SignImmE <= SignImmD;
-      PCPlus4E <= PCPlus4D;
+      RtE        <= RtD;
+      RdE        <= RdD;
+      SignImmE   <= SignImmD;
+      PCPlus4E   <= PCPlus4D;
     end if;
   end process;
 end;
@@ -693,8 +695,8 @@ Entity regaux3 is
         RegWriteE     : in std_logic;
         MemtoRegE     : in std_logic;
         MemWriteE     : in std_logic;
-        JumpE         : in std_logic;
-        PCSrcE        : in std_logic;
+        BranchE       : in std_logic;
+        Branch_NEE    : in std_logic;
         
         ZeroE         : in std_logic;
         ALUOutE       : in std_logic_vector(W-1 downto 0);
@@ -705,8 +707,8 @@ Entity regaux3 is
         RegWriteM     : out std_logic;
         MemtoRegM     : out std_logic;
         MemWriteM     : out std_logic;
-        JumpM         : out std_logic;
-        PCSrcM        : out std_logic;
+        BranchM       : out std_logic;
+        Branch_NEM    : out std_logic;
         
         ZeroM         : out std_logic;
         ALUOutM       : out std_logic_vector(W-1 downto 0);
@@ -723,8 +725,8 @@ begin
       RegWriteM  <= RegWriteE;
       MemtoRegM  <= MemtoRegE;
       MemWriteM  <= MemWriteE;
-      JumpM      <= JumpE;
-      PCSrcM     <= PCSrcE;
+      BranchM    <= BranchE;
+      Branch_NEM <= Branch_NEE;
       
       ZeroM      <= ZeroE;
       AluOutM    <= AluOutE;
