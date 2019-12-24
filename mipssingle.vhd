@@ -245,6 +245,8 @@ begin
                        alusrc, regdst, regwrite, jump, aluop);
   ad: aludec port map(funct, aluop, alucontrol);
 
+  --TODO: move pcsrc from control to datapath
+  --TODO: add branch_ne condition
   pcsrc <= branch and zero;
 end;
 
@@ -276,6 +278,7 @@ begin
     end case;
   end process;
 
+  --TODO: add Branch_NE control signal
   -- (regwrite, regdst, alusrc, branch, memwrite,
   --  memtoreg, jump, aluop(1 downto 0)) <= controls;
  (regwrite, regdst, alusrc, branch, memwrite,
@@ -388,14 +391,17 @@ architecture struct of datapath is
          MemToRegM, MemWriteM, 
          JumpM, PCSrcM:        STD_LOGIC;
 
-  signal result:               STD_LOGIC_VECTOR(31 downto 0);
-
+  signal RegWriteW, MemToRegW: STD_LOGIC;
+  signal ALUOutW, ReadDataW,
+         ResultW:              STD_LOGIC_VECTOR(31 downto 0);
+  signal WriteRegW:            STD_LOGIC_VECTOR(4 downto 0);
 begin
 
   -- IF
 
-  pcbrmux: mux2 generic map(32) port map(PCPlus4F, pcbranch, pcsrc, pcnextbr);
-  pcjump <= PCPlus4D(31 downto 28) & instr(25 downto 0) & "00";
+  pcbrmux: mux2 generic map(32) port map(PCPlus4F, PCBranchM, PCSrcM, pcnextbr);
+  --TODO: move PCBranch from control to datapath
+  pcjump <= PCPlus4D(31 downto 28) & InstrD(25 downto 0) & "00";
   pcmux: mux2 generic map(32) port map(pcnextbr, pcjump, jump, pcnext);
   pcreg: flopr generic map(32) port map(clk, reset, pcnext, PCF);
   pc <= PCF;
@@ -407,7 +413,7 @@ begin
   
   rf: regfile port map(
     clk, regwrite, InstrD(25 downto 21),
-    InstrD(20 downto 16), writereg, result, SrcAD, WriteDataD
+    InstrD(20 downto 16), WriteRegW, ResultW, SrcAD, WriteDataD
   );
   se: signext port map(InstrD(15 downto 0), SignImmD);
 
@@ -435,9 +441,18 @@ begin
     ZeroM, ALUOutM, WriteDataM, WriteRegM, PcBranchM
   );
 
-  -- register file logic
+  -- MEM
 
-  resmux: mux2 generic map(32) port map(aluout, readdata, memtoreg, result);
+  regpipe4: regaux4 generic map(32) port map(clk,
+    RegWriteM, MemToRegM,
+    ALUOutM, ReadDataM, WriteRegM,
+    RegWriteW, MemToRegW,
+    ALUOutW, ReadDataW, WriteRegW
+  );
+
+  -- WB
+
+  resmux: mux2 generic map(32) port map(ALUOutW, ReadDataW, MemToRegW, ResultW);
  
 end;
 
@@ -582,7 +597,7 @@ end;
 library ieee;
 use ieee.std_logic_1164.all;
 
--- Auxiliar register 1 - IF stage to ID stage
+-- Auxiliary register 1 - IF stage to ID stage
 
 Entity regaux1 is
   Generic(W : integer);
@@ -598,18 +613,18 @@ Entity regaux1 is
   End;
 
 Architecture behave of regaux1 is
+begin
+  process(clk)
   begin
-    process(clk)
-    begin
-      if( clk'event and clk = '1') then
-        InstrD <= RD;
-        
-        PCPlus4D <= PCPlus4F;
-      end if;
-    end process;
-  end;
+    if( clk'event and clk = '1') then
+      InstrD <= RD;
+      
+      PCPlus4D <= PCPlus4F;
+    end if;
+  end process;
+end;
 
--- Auxiliar register 2 - ID stage to EX stage
+-- Auxiliary register 2 - ID stage to EX stage
 
 Entity regaux2 is
   Generic(W : integer);
@@ -672,7 +687,7 @@ begin
   end process;
 end;
 
--- Auxiliar register 3 - EX stage to MEM stage
+-- Auxiliary register 3 - EX stage to MEM stage
 
 Entity regaux3 is
   Generic(W : integer);
@@ -700,24 +715,60 @@ Entity regaux3 is
         WriteDataM    : out std_logic_vector(W-1 downto 0);
         WriteRegM     : out std_logic_vector(4 downto 0);
         PcBranchM     : out std_logic_vector(W-1 downto 0));
-  end;
+end;
 
 Architecture behave of regaux3 is
+begin
+  process(clk)
   begin
-    process(clk)
-    begin
-      if( clk'event and clk = '1') then
-        RegWriteM  <= RegWriteE;
-        MemtoRegM  <= MemtoRegE;
-        MemWriteM  <= MemWriteE;
-        JumpM      <= JumpE;
-        PCSrcM     <= PCSrcE;
+    if( clk'event and clk = '1') then
+      RegWriteM  <= RegWriteE;
+      MemtoRegM  <= MemtoRegE;
+      MemWriteM  <= MemWriteE;
+      JumpM      <= JumpE;
+      PCSrcM     <= PCSrcE;
+      
+      ZeroM      <= ZeroE;
+      AluOutM    <= AluOutE;
+      WriteDataM <= WriteDataE;
+      WriteRegM  <= WriteRegE;
+      PcBranchM  <= PcBranchE;
+    end if;
+  end process;
+end;
+
+-- Auxiliary register 4 - MEM stage to WB stage
+
+Entity regaux4 is
+  Generic(W : integer);
+  Port (clk           : in std_logic;
+        RegWriteM     : in std_logic;
+        MemToRegM     : in std_logic;
         
-        ZeroM      <= ZeroE;
-        AluOutM    <= AluOutE;
-        WriteDataM <= WriteDataE;
-        WriteRegM  <= WriteRegE;
-        PcBranchM  <= PcBranchE;
-      end if;
-    end process;
-  end;
+        ReadDataM     : in std_logic_vector(W-1 downto 0);
+        AluOutM       : in std_logic_vector(W-1 downto 0);
+        WriteRegM     : in std_logic_vector(4 downto 0);
+        
+        RegWriteW     : out std_logic;
+        MemToRegW     : out std_logic;
+        
+        ReadDataW     : out std_logic_vector(W-1 downto 0);
+        AluOutW       : out std_logic_vector(W-1 downto 0);
+        WriteRegW     : out std_logic_vector(4 downto 0));
+End;
+
+Architecture behave of regaux4 is
+begin
+  process(clk)
+  begin
+    if( clk'event and clk = '1') then
+      RegWriteW <= RegWriteM;
+      MemToRegW <= MemToRegM;
+
+      AluOutW   <= AluOutM;
+      ReadDataW <= ReadDataM;
+      WriteRegW <= WriteRegM;
+    end if;
+  end process;
+end;
+
