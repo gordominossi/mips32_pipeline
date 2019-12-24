@@ -246,19 +246,18 @@ begin
   ad: aludec port map(funct, aluop, alucontrol);
 
   --TODO: move pcsrc from control to datapath
-  --TODO: add branch_ne condition
-  pcsrc <= branch and zero;
+  pcsrc <= branch and zero or branch_ne and not zero;
 end;
 
 library IEEE; use IEEE.STD_LOGIC_1164.all;
 
 entity maindec is -- main control decoder
-  port(op:                 in  STD_LOGIC_VECTOR(5 downto 0);
-       memtoreg, memwrite: out STD_LOGIC;
-       branch, alusrc:     out STD_LOGIC;
-       regdst, regwrite:   out STD_LOGIC;
-       jump:               out STD_LOGIC;
-       aluop:              out STD_LOGIC_VECTOR(1 downto 0));
+  port(op:                  in  STD_LOGIC_VECTOR(5 downto 0);
+       RegWrite, RegDst:    out STD_LOGIC;
+       ALUSrc, Branch:      out STD_LOGIC;
+       Branch_NE, MemWrite: out STD_LOGIC;
+       MemToReg, Jump:      out STD_LOGIC;
+       ALUOp:               out STD_LOGIC_VECTOR(1 downto 0));
 end;
 
 architecture behave of maindec is
@@ -266,24 +265,23 @@ architecture behave of maindec is
 begin
   process(all) begin
     case op is
-      when "000000" => controls <= "110000011"; -- RTYPE
-      when "100011" => controls <= "101001000"; -- LW
-      when "101011" => controls <= "001010000"; -- SW
-      when "000100" => controls <= "000100001"; -- BEQ
-      when "000101" => controls <= "000100001"; -- BNE
-      when "001000" => controls <= "101000000"; -- ADDI
-      when "001101" => controls <= "101000010"; -- ORI
-      when "000010" => controls <= "000000100"; -- J
-      when others   => controls <= "---------"; -- illegal op
+      when "000000" => controls <= "1100000011"; -- RTYPE
+      when "100011" => controls <= "1010001000"; -- LW
+      when "101011" => controls <= "0010010000"; -- SW
+      when "000100" => controls <= "0001000001"; -- BEQ
+      when "000101" => controls <= "0000100001"; -- BNE
+      when "001000" => controls <= "1010000000"; -- ADDI
+      when "001101" => controls <= "1010000010"; -- ORI
+      when "000010" => controls <= "0000000100"; -- J
+      when others   => controls <= "----------"; -- illegal op
     end case;
   end process;
 
-  --TODO: add Branch_NE control signal
-  -- (regwrite, regdst, alusrc, branch, memwrite,
+  -- (regwrite, regdst, alusrc, branch, branch_ne, memwrite,
   --  memtoreg, jump, aluop(1 downto 0)) <= controls;
- (regwrite, regdst, alusrc, branch, memwrite,
-  memtoreg, jump) <= controls(8 downto 2);
-  aluop <= controls(1 downto 0);
+ (RegWrite, RegDst, ALUSrc, Branch, branch_NE, MemWrite,
+  MemToReg, Jump) <= controls(9 downto 2);
+  ALUOp <= controls(1 downto 0);
 end;
 
 library IEEE; use IEEE.STD_LOGIC_1164.all;
