@@ -130,7 +130,7 @@ begin
     file mem_file: TEXT;
     variable L: line;
     variable ch: character;
-    variable i, index, result: integer;
+    variable index, result: integer;
     type ramtype is array (63 downto 0) of STD_LOGIC_VECTOR(31 downto 0);
     variable mem: ramtype;
   begin
@@ -391,6 +391,7 @@ architecture struct of datapath is
 
           RD1         : in std_logic_vector(W-1 downto 0);
           RD2         : in std_logic_vector(W-1 downto 0);
+          RsD         : in std_logic_vector(4 downto 0);
           RtD         : in std_logic_vector(4 downto 0);
           RdD         : in std_logic_vector(4 downto 0);
           SignImmD    : in std_logic_vector(W-1 downto 0);
@@ -407,6 +408,7 @@ architecture struct of datapath is
   
           SrcAE       : out std_logic_vector(W-1 downto 0);
           WriteDataE  : out std_logic_vector(W-1 downto 0);
+          RsE         : out std_logic_vector(4 downto 0);
           RtE         : out std_logic_vector(4 downto 0);
           RdE         : out std_logic_vector(4 downto 0);
           SignImmE    : out std_logic_vector(W-1 downto 0);
@@ -456,13 +458,31 @@ component regaux4
         AluOutW       : out std_logic_vector(W-1 downto 0);
         WriteRegW     : out std_logic_vector(4 downto 0));
 end component;
+component HazardUnit
+  port (RsE:        in std_logic_vector(4 downto 0);
+        RtE:        in std_logic_vector(4 downto 0);
+        WriteRegM:  in std_logic_vector(4 downto 0);
+        WriteRegW:  in std_logic_vector(4 downto 0);
+        RegWriteM:  in std_logic;
+        RegWriteW:  in std_logic;
+
+        ForwardAE: out std_logic_vector(1 downto 0);
+        ForwardBE: out std_logic_vector(1 downto 0));
+end component;
+component mux3 is -- three-input multiplexer
+  generic(width: integer);
+  port(d0, d1, d2: in  STD_LOGIC_VECTOR(width-1 downto 0);
+       s:          in  STD_LOGIC_VECTOR(1 downto 0);
+       
+       y:          out STD_LOGIC_VECTOR(width-1 downto 0));
+end component;
 
   signal pcjump, pcnext,
          pcnextbr, PCPlus4F,
          pcbranch, PCF:         STD_LOGIC_VECTOR(31 downto 0);
 
-  signal SignImmD, SrcAD, 
-         WriteDataD, InstrD,
+  signal SignImmD, RD1D, 
+         RD2D, InstrD,
          PCPlus4D:              STD_LOGIC_VECTOR(31 downto 0);
 
   signal RegWriteE, MemToRegE,
@@ -471,11 +491,14 @@ end component;
          ALUSrcE, RegDstE,
          ZeroE:                 STD_LOGIC;
   signal ALUControlE:           STD_LOGIC_VECTOR(2 downto 0);
-  signal SrcAE, SrcBE, ALUOutE,
-         WriteDataE, SignImmE,
+  signal RD1E, SrcBE, ALUOutE,
+         RD2E, SignImmE,
          SignImmShE, PCPlus4E,
-         PCBranchE:             STD_LOGIC_VECTOR(31 downto 0);
-  signal RtE, RdE, WriteRegE:   STD_LOGIC_VECTOR(4 downto 0);
+         PCBranchE, ForwardedAE,
+         ForwardedBE:           STD_LOGIC_VECTOR(31 downto 0);
+  signal RsE, RtE, RdE,
+         WriteRegE:             STD_LOGIC_VECTOR(4 downto 0);
+  signal ForwardAE, ForwardBE:  STD_LOGIC_VECTOR(1 downto 0);
 
   signal ALUOutM, WriteDataM,
          ReadDataM, PCBranchM:  STD_LOGIC_VECTOR(31 downto 0);
@@ -506,30 +529,33 @@ begin
   
   rf: regfile port map(
     clk, regwrite, InstrD(25 downto 21),
-    InstrD(20 downto 16), WriteRegW, ResultW, SrcAD, WriteDataD
+    InstrD(20 downto 16), WriteRegW, ResultW, RD1D, RD2D
   );
   se: signext port map(InstrD(15 downto 0), SignImmD);
 
   regpipe2: regaux2 generic map(32) port map(clk,
     regwrite, memtoreg, memwrite, Branch, Branch_NE, alucontrol, alusrc, regdst,
-    SrcAD, WriteDataD, InstrD(20 downto 16), InstrD(15 downto 11), SignImmD, PCPlus4D,
+    RD1D, RD2D, InstrD(25 downto 21), InstrD(20 downto 16), InstrD(15 downto 11), SignImmD, PCPlus4D,
     RegWriteE, MemToRegE, MemWriteE, BranchE, Branch_NEE, ALUControlE, ALUSrcE, RegDstE,
-    SrcAE, WriteDataE, RtE, RdE, SignImmE, PCPlus4E
+    RD1E, RD2E, RsE, RtE, RdE, SignImmE, PCPlus4E
   );
 
   -- EX
 
-  srcbmux: mux2 generic map(32) port map(WriteDataD, SignImmD, alusrc, SrcBE);
-  mainalu: alu port map(SrcAE, SrcBE, ALUControlE, ALUOutE, ZeroE);
+  fwdamux: mux3 generic map(32) port map(RD1E, ResultW, ALUOutM, ForwardAE, ForwardedAE);
+  fwdbmux: mux3 generic map(32) port map(RD2E, ResultW, ALUOutM, ForwardBE, ForwardedBE);
 
-  wrmux: mux2 generic map(5) port map(RtE, rdE, RegDstE, WriteRegE);
+  srcbmux: mux2 generic map(32) port map(ForwardedBE, SignImmE, alusrc, SrcBE);
+  mainalu: alu port map(ForwardedAE, SrcBE, ALUControlE, ALUOutE, ZeroE);
+
+  wrmux: mux2 generic map(5) port map(RtE, RdE, RegDstE, WriteRegE);
 
   immsh: sl2 port map(SignImmD, SignImmShE);
   pcadd2: adder port map(PCPlus4D, SignImmShE, PCBranchE);
 
   regpipe3: regaux3 generic map(32) port map(clk,
     RegWriteE, MemToRegE, MemWriteE, BranchE, Branch_NEE,
-    ZeroE, ALUOutE, WriteDataE, WriteRegE, PCBranchE,
+    ZeroE, ALUOutE, ForwardedBE, WriteRegE, PCBranchE,
     RegWriteM, MemToRegM, MemWriteM, BranchM, Branch_NEM,
     ZeroM, ALUOutM, WriteDataM, WriteRegM, PCBranchM
   );
@@ -548,6 +574,13 @@ begin
   -- WB
 
   resmux: mux2 generic map(32) port map(ALUOutW, ReadDataW, MemToRegW, ResultW);
+
+  -- HU
+
+  hu: HazardUnit port map(RsE, RtE, WriteRegM, WriteRegW, RegWriteM, RegWriteW,
+    ForwardAE,
+    ForwardBE
+  );
  
 end;
 
@@ -689,10 +722,10 @@ begin
   zero <= '1' when result = X"00000000" else '0';
 end;
 
-library ieee;
-use ieee.std_logic_1164.all;
 
 -- Auxiliary register 1 - IF stage to ID stage
+library ieee;
+use ieee.std_logic_1164.all;
 
 Entity regaux1 is
   Generic(W : integer);
@@ -711,7 +744,7 @@ Architecture behave of regaux1 is
 begin
   process(clk)
   begin
-    if( clk'event and clk = '1') then
+    if(clk'event and clk = '1') then
       InstrD <= RD;
       
       PCPlus4D <= PCPlus4F;
@@ -719,10 +752,10 @@ begin
   end process;
 end;
 
-library ieee;
-use ieee.std_logic_1164.all;
 
 -- Auxiliary register 2 - ID stage to EX stage
+library ieee;
+use ieee.std_logic_1164.all;
 
 Entity regaux2 is
   Generic(W : integer);
@@ -738,6 +771,7 @@ Entity regaux2 is
 
         RD1         : in std_logic_vector(W-1 downto 0);
         RD2         : in std_logic_vector(W-1 downto 0);
+        RsD         : in std_logic_vector(4 downto 0);
         RtD         : in std_logic_vector(4 downto 0);
         RdD         : in std_logic_vector(4 downto 0);
         SignImmD    : in std_logic_vector(W-1 downto 0);
@@ -754,6 +788,7 @@ Entity regaux2 is
 
         SrcAE       : out std_logic_vector(W-1 downto 0);
         WriteDataE  : out std_logic_vector(W-1 downto 0);
+        RsE         : out std_logic_vector(4 downto 0);
         RtE         : out std_logic_vector(4 downto 0);
         RdE         : out std_logic_vector(4 downto 0);
         SignImmE    : out std_logic_vector(W-1 downto 0);
@@ -764,7 +799,7 @@ Architecture behave of regaux2 is
 begin
   process(clk)
   begin
-    if( clk'event and clk = '1') then
+    if(clk'event and clk = '1') then
       RegWriteE   <= RegWriteD;
       MemtoRegE   <= MemtoRegD;
       MemWriteE   <= MemWriteD;
@@ -776,6 +811,7 @@ begin
 
       SrcAE      <= RD1;
       WriteDataE <= RD2;
+      RsE        <= RsD;
       RtE        <= RtD;
       RdE        <= RdD;
       SignImmE   <= SignImmD;
@@ -784,10 +820,10 @@ begin
   end process;
 end;
 
-library ieee;
-use ieee.std_logic_1164.all;
 
 -- Auxiliary register 3 - EX stage to MEM stage
+library ieee;
+use ieee.std_logic_1164.all;
 
 Entity regaux3 is
   Generic(W : integer);
@@ -821,7 +857,7 @@ Architecture behave of regaux3 is
 begin
   process(clk)
   begin
-    if( clk'event and clk = '1') then
+    if(clk'event and clk = '1') then
       RegWriteM  <= RegWriteE;
       MemtoRegM  <= MemtoRegE;
       MemWriteM  <= MemWriteE;
@@ -837,10 +873,10 @@ begin
   end process;
 end;
 
-library ieee;
-use ieee.std_logic_1164.all;
 
 -- Auxiliary register 4 - MEM stage to WB stage
+library ieee;
+use ieee.std_logic_1164.all;
 
 Entity regaux4 is
   Generic(W : integer);
@@ -864,7 +900,7 @@ Architecture behave of regaux4 is
 begin
   process(clk)
   begin
-    if( clk'event and clk = '1') then
+    if(clk'event and clk = '1') then
       RegWriteW <= RegWriteM;
       MemToRegW <= MemToRegM;
 
@@ -875,3 +911,52 @@ begin
   end process;
 end;
 
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity HazardUnit is
+  port (RsE:        in std_logic_vector(4 downto 0);
+        RtE:        in std_logic_vector(4 downto 0);
+        WriteRegM:  in std_logic_vector(4 downto 0);
+        WriteRegW:  in std_logic_vector(4 downto 0);
+        RegWriteM:  in std_logic;
+        RegWriteW:  in std_logic;
+
+        ForwardAE: out std_logic_vector(1 downto 0);
+        ForwardBE: out std_logic_vector(1 downto 0)
+  );
+end;
+
+architecture behave of HazardUnit is
+begin
+  process(RsE, RtE, WriteRegW, WriteRegM)
+  begin
+    if((RsE /= "0000") and (RsE = WriteRegM) and (RegWriteM = '1')) then
+      ForwardAE <= "10";
+    elsif((RsE /= "0000") and (RsE = WriteRegM) and (RegWriteW = '1')) then
+      ForwardAE <= "01";
+    else
+      ForwardAE <= "00";
+    end if;
+  end process;
+end;
+
+
+library IEEE; use IEEE.STD_LOGIC_1164.all;
+
+entity mux3 is -- three-input multiplexer
+  generic(width: integer);
+  port(d0, d1, d2: in  STD_LOGIC_VECTOR(width-1 downto 0);
+       s:          in  STD_LOGIC_VECTOR(1 downto 0);
+       
+       y:          out STD_LOGIC_VECTOR(width-1 downto 0));
+end;
+
+architecture behave of mux3 is
+begin
+  with s select
+    y <= d0 when "00",
+         d1 when "01",
+         d2 when others;
+end;
