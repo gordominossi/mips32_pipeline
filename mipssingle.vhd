@@ -357,6 +357,7 @@ architecture struct of datapath is
   component flopr
     generic(width: integer);
     port(clk, reset: in  STD_LOGIC;
+         en:         in  STD_LOGIC;
          d:          in  STD_LOGIC_VECTOR(width-1 downto 0);
          q:          out STD_LOGIC_VECTOR(width-1 downto 0));
   end component;
@@ -369,6 +370,8 @@ architecture struct of datapath is
   component regaux1
     generic(W : integer);
     port (clk         : in std_logic;
+          en          : in std_logic;
+
           RD          : in std_logic_vector(W-1 downto 0);
           
           PCPlus4F    : in std_logic_vector(W-1 downto 0);
@@ -380,6 +383,8 @@ architecture struct of datapath is
   component regaux2
     generic(W : integer);
     port (clk         : in std_logic;
+          en          : in std_logic;
+
           RegWriteD   : in std_logic;
           MemtoRegD   : in std_logic;
           MemWriteD   : in std_logic;
@@ -417,6 +422,8 @@ end component;
 component regaux3
   generic(W : integer);
   port (clk           : in std_logic;
+        clr           : in std_logic;
+
         RegWriteE     : in std_logic;
         MemtoRegE     : in std_logic;
         MemWriteE     : in std_logic;
@@ -444,6 +451,7 @@ end component;
 component regaux4
   generic(W : integer);
   port (clk           : in std_logic;
+
         RegWriteM     : in std_logic;
         MemToRegM     : in std_logic;
         
@@ -528,11 +536,11 @@ begin
   pcbrmux: mux2 generic map(32) port map(PCPlus4F, PCBranchM, PCSrcM, pcnextbr);
   pcjump <= PCPlus4D(31 downto 28) & InstrD(25 downto 0) & "00";
   pcmux: mux2 generic map(32) port map(pcnextbr, pcjump, jump, pcnext);
-  pcreg: flopr generic map(32) port map(clk, reset, pcnext, PCF);
+  pcreg: flopr generic map(32) port map(clk, reset, StallF, pcnext, PCF);
   pc <= PCF;
   pcadd1: adder port map(PCF, X"00000004", PCPlus4F);
 
-  regpipe1: regaux1 generic map(32) port map(clk, instr, PCPlus4F, InstrD, PCPlus4D);
+  regpipe1: regaux1 generic map(32) port map(clk, StallD, instr, PCPlus4F, InstrD, PCPlus4D);
  
   -- ID
 
@@ -546,7 +554,7 @@ begin
   );
   se: signext port map(InstrD(15 downto 0), SignImmD);
 
-  regpipe2: regaux2 generic map(32) port map(clk,
+  regpipe2: regaux2 generic map(32) port map(clk, StallD,
     regwrite, memtoreg, memwrite, Branch, Branch_NE, alucontrol, alusrc, regdst,
     RD1D, RD2D, RsD, RtD, RdD, SignImmD, PCPlus4D,
     RegWriteE, MemToRegE, MemWriteE, BranchE, Branch_NEE, ALUControlE, ALUSrcE, RegDstE,
@@ -566,7 +574,7 @@ begin
   immsh: sl2 port map(SignImmD, SignImmShE);
   pcadd2: adder port map(PCPlus4D, SignImmShE, PCBranchE);
 
-  regpipe3: regaux3 generic map(32) port map(clk,
+  regpipe3: regaux3 generic map(32) port map(clk, FlushE,
     RegWriteE, MemToRegE, MemWriteE, BranchE, Branch_NEE,
     ZeroE, ALUOutE, ForwardedBE, WriteRegE, PCBranchE,
     RegWriteM, MemToRegM, MemWriteM, BranchM, Branch_NEM,
@@ -674,18 +682,19 @@ end;
 
 library IEEE; use IEEE.STD_LOGIC_1164.all;  use IEEE.STD_LOGIC_ARITH.all;
 
-entity flopr is -- flip-flop with synchronous reset
+entity flopr is -- flip-flop with enable and synchronous reset
   generic(width: integer);
   port(clk, reset: in  STD_LOGIC;
+       en:         in  STD_LOGIC;
        d:          in  STD_LOGIC_VECTOR(width-1 downto 0);
        q:          out STD_LOGIC_VECTOR(width-1 downto 0));
 end;
 
 architecture asynchronous of flopr is
 begin
-  process(clk, reset) begin
+  process(all) begin
     if reset then  q <= (others => '0');
-    elsif rising_edge(clk) then
+    elsif (rising_edge(clk) and en = '0') then
       q <= d;
     end if;
   end process;
@@ -743,6 +752,7 @@ use ieee.std_logic_1164.all;
 Entity regaux1 is
   Generic(W : integer);
   Port (clk         : in std_logic;
+        en          : in std_logic;
 
         RD          : in std_logic_vector(W-1 downto 0);
 
@@ -755,9 +765,9 @@ Entity regaux1 is
 
 Architecture behave of regaux1 is
 begin
-  process(clk)
+  process(all)
   begin
-    if(clk'event and clk = '1') then
+    if(clk'event and clk = '1' and en = '0') then
       InstrD <= RD;
       
       PCPlus4D <= PCPlus4F;
@@ -772,7 +782,9 @@ use ieee.std_logic_1164.all;
 
 Entity regaux2 is
   Generic(W : integer);
-  Port (clk           : in std_logic;
+  Port (clk         : in std_logic;
+        en          : in std_logic;
+
         RegWriteD   : in std_logic;
         MemtoRegD   : in std_logic;
         MemWriteD   : in std_logic;
@@ -810,7 +822,7 @@ End;
 
 Architecture behave of regaux2 is
 begin
-  process(clk)
+  process(all)
   begin
     if(clk'event and clk = '1') then
       RegWriteE   <= RegWriteD;
@@ -841,6 +853,8 @@ use ieee.std_logic_1164.all;
 Entity regaux3 is
   Generic(W : integer);
   Port (clk           : in std_logic;
+        clr           : in std_logic;
+
         RegWriteE     : in std_logic;
         MemtoRegE     : in std_logic;
         MemWriteE     : in std_logic;
@@ -868,7 +882,7 @@ end;
 
 Architecture behave of regaux3 is
 begin
-  process(clk)
+  process(all)
   begin
     if(clk'event and clk = '1') then
       RegWriteM  <= RegWriteE;
@@ -894,6 +908,7 @@ use ieee.std_logic_1164.all;
 Entity regaux4 is
   Generic(W : integer);
   Port (clk           : in std_logic;
+  
         RegWriteM     : in std_logic;
         MemToRegM     : in std_logic;
         
@@ -911,7 +926,7 @@ End;
 
 Architecture behave of regaux4 is
 begin
-  process(clk)
+  process(all)
   begin
     if(clk'event and clk = '1') then
       RegWriteW <= RegWriteM;
