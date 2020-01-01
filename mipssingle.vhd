@@ -463,10 +463,16 @@ component HazardUnit
         RtE:        in std_logic_vector(4 downto 0);
         WriteRegM:  in std_logic_vector(4 downto 0);
         WriteRegW:  in std_logic_vector(4 downto 0);
+        WriteRegE:  in std_logic_vector(4 downto 0);
         RegWriteM:  in std_logic;
         RegWriteW:  in std_logic;
         MemToRegE:  in std_logic;
+        MemToRegM:  in std_logic;
+        BranchD:    in std_logic;
+        RegWriteE:  in std_logic;
 
+        ForwardAD: out std_logic;
+        ForwardBD: out std_logic;
         ForwardAE: out std_logic_vector(1 downto 0);
         ForwardBE: out std_logic_vector(1 downto 0);
         StallF:    out std_logic;
@@ -492,8 +498,10 @@ end component;
 
   signal SignImmD, RD1D, RD2D, 
          InstrD, PCPlus4D, 
-         SignImmShD, PCBranchD:    STD_LOGIC_VECTOR(31 downto 0);
-  signal StallD, PCSrcD, EqualD:   STD_LOGIC;
+         SignImmShD, PCBranchD,
+         CompAD, CompBD:           STD_LOGIC_VECTOR(31 downto 0);
+  signal StallD, PCSrcD, EqualD,
+         ForwardAD, ForwardBD:     STD_LOGIC;
   signal RsD, RtD, RdD:            STD_LOGIC_VECTOR(4 downto 0);
 
   signal RegWriteE, MemToRegE,
@@ -541,7 +549,9 @@ begin
     RD1D, RD2D
   );
 
-  comp: comparator generic map(32) port map(RD1D, RD2D, EqualD);
+  compamux: mux2 generic map(32) port map(RD1D, ALUOutM, ForwardAD, CompAD);
+  compbmux: mux2 generic map(32) port map(RD2D, ALUOutM, ForwardBD, CompBD);
+  comp: comparator generic map(32) port map(CompAD, CompBD, EqualD);
   PCSrcD <= ((Branch and EqualD) or (Branch_NE and (not EqualD)));
 
   se: signext port map(InstrD(15 downto 0), SignImmD);
@@ -589,8 +599,8 @@ begin
   -- HU
 
   hu: HazardUnit port map(
-    RsD, RtD, RsE, RtE, WriteRegM, WriteRegW, RegWriteM, RegWriteW, MemToRegE,
-    ForwardAE, ForwardBE, StallF, StallD, FlushE
+    RsD, RtD, RsE, RtE, WriteRegM, WriteRegW, WriteRegE, RegWriteM, RegWriteW, MemToRegE, MemToRegM, Branch, RegWriteE,
+    ForwardAD, ForwardBD, ForwardAE, ForwardBE, StallF, StallD, FlushE
   );
  
 end;
@@ -945,36 +955,54 @@ entity HazardUnit is
         RtE:        in std_logic_vector(4 downto 0);
         WriteRegM:  in std_logic_vector(4 downto 0);
         WriteRegW:  in std_logic_vector(4 downto 0);
+        WriteRegE:  in std_logic_vector(4 downto 0);
         RegWriteM:  in std_logic;
         RegWriteW:  in std_logic;
         MemToRegE:  in std_logic;
+        MemToRegM:  in std_logic;
+        BranchD:    in std_logic;
+        RegWriteE:  in std_logic;
 
+        ForwardAD: out std_logic;
+        ForwardBD: out std_logic;
         ForwardAE: out std_logic_vector(1 downto 0);
         ForwardBE: out std_logic_vector(1 downto 0);
         StallF:    out std_logic;
         StallD:    out std_logic;
-        FlushE:    out std_logic
-  );
+        FlushE:    out std_logic);
 end;
 
 architecture behave of HazardUnit is
 begin
-  -- data hazard: forwarding
-  process(RsE, RtE, WriteRegW, WriteRegM)
+  -- forwarding
+  process(RsE, RtE, RsD, RtD, WriteRegW, WriteRegM, RegWriteM)
   begin
-    if RsE /= "0000" and RsE = WriteRegM and RegWriteM = '1' then
+    if RsE /= "00000" and RsE = WriteRegM and RegWriteM = '1' then
       ForwardAE <= "10";
-    elsif RsE /= "0000" and RsE = WriteRegM and RegWriteW = '1' then
+    elsif RsE /= "00000" and RsE = WriteRegM and RegWriteW = '1' then
       ForwardAE <= "01";
     else
       ForwardAE <= "00";
     end if;
+
+    if RtE /= "00000" and RtE = WriteRegM and RegWriteM = '1' then
+      ForwardBE <= "10";
+    elsif RtE /= "00000" and RtE = WriteRegM and RegWriteW = '1' then
+      ForwardBE <= "01";
+    else
+      ForwardBE <= "00";
+    end if;
+
+    ForwardAD <= '1' when (RsD /= "00000") and RsD = WriteRegM and RegWriteM = '1' else '0';
+    ForwardBD <= '1' when (RtD /= "00000") and RtD = WriteRegM and RegWriteM = '1' else '0';
   end process;
 
-  -- data hazard: stalling
-  process(RsD, RtD, RtE, MemToRegE)
+  -- stalling
+  process(RsD, RtD, RtE, MemToRegE, MemToRegM, BranchD, RegWriteE, WriteRegE, WriteRegM)
   begin
-    if (RsD = RtE or RtD = RtE) and MemToRegE = '1' then
+    if ((RsD = RtE or RtD = RtE) and MemToRegE = '1') or
+        (BranchD = '1' and RegWriteE = '1' and (WriteRegE = RsD or WriteRegE = RtD)) or 
+        (BranchD = '1' and MemToRegM = '1' and (WriteRegM = RsD or WriteRegM = RtD)) then
       StallF <= '1';
       StallD <= '1';
       FlushE <= '1';
