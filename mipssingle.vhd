@@ -459,15 +459,21 @@ component regaux4
         WriteRegW     : out std_logic_vector(4 downto 0));
 end component;
 component HazardUnit
-  port (RsE:        in std_logic_vector(4 downto 0);
+  port (RsD:        in std_logic_vector(4 downto 0);
+        RtD:        in std_logic_vector(4 downto 0);
+        RsE:        in std_logic_vector(4 downto 0);
         RtE:        in std_logic_vector(4 downto 0);
         WriteRegM:  in std_logic_vector(4 downto 0);
         WriteRegW:  in std_logic_vector(4 downto 0);
         RegWriteM:  in std_logic;
         RegWriteW:  in std_logic;
+        MemToRegE:  in std_logic;
 
         ForwardAE: out std_logic_vector(1 downto 0);
-        ForwardBE: out std_logic_vector(1 downto 0));
+        ForwardBE: out std_logic_vector(1 downto 0);
+        StallF:    out std_logic;
+        StallD:    out std_logic;
+        FlushE:    out std_logic);
 end component;
 component mux3 is -- three-input multiplexer
   generic(width: integer);
@@ -480,16 +486,19 @@ end component;
   signal pcjump, pcnext,
          pcnextbr, PCPlus4F,
          pcbranch, PCF:         STD_LOGIC_VECTOR(31 downto 0);
+  signal StallF:                STD_LOGIC;
 
   signal SignImmD, RD1D, 
          RD2D, InstrD,
          PCPlus4D:              STD_LOGIC_VECTOR(31 downto 0);
+  signal StallD:                STD_LOGIC;
+  signal RsD, RtD, RdD:         STD_LOGIC_VECTOR(4 downto 0);
 
   signal RegWriteE, MemToRegE,
          MemWriteE, BranchE,
          Branch_NEE,
          ALUSrcE, RegDstE,
-         ZeroE:                 STD_LOGIC;
+         ZeroE, FlushE:         STD_LOGIC;
   signal ALUControlE:           STD_LOGIC_VECTOR(2 downto 0);
   signal RD1E, SrcBE, ALUOutE,
          RD2E, SignImmE,
@@ -526,16 +535,20 @@ begin
   regpipe1: regaux1 generic map(32) port map(clk, instr, PCPlus4F, InstrD, PCPlus4D);
  
   -- ID
+
+  RsD <= InstrD(25 downto 21);
+  RtD <= InstrD(20 downto 16);
+  RdD <= InstrD(15 downto 11);
   
   rf: regfile port map(
-    clk, regwrite, InstrD(25 downto 21),
-    InstrD(20 downto 16), WriteRegW, ResultW, RD1D, RD2D
+    clk, regwrite, RsD, RtD, WriteRegW, ResultW,
+    RD1D, RD2D
   );
   se: signext port map(InstrD(15 downto 0), SignImmD);
 
   regpipe2: regaux2 generic map(32) port map(clk,
     regwrite, memtoreg, memwrite, Branch, Branch_NE, alucontrol, alusrc, regdst,
-    RD1D, RD2D, InstrD(25 downto 21), InstrD(20 downto 16), InstrD(15 downto 11), SignImmD, PCPlus4D,
+    RD1D, RD2D, RsD, RtD, RdD, SignImmD, PCPlus4D,
     RegWriteE, MemToRegE, MemWriteE, BranchE, Branch_NEE, ALUControlE, ALUSrcE, RegDstE,
     RD1E, RD2E, RsE, RtE, RdE, SignImmE, PCPlus4E
   );
@@ -577,9 +590,9 @@ begin
 
   -- HU
 
-  hu: HazardUnit port map(RsE, RtE, WriteRegM, WriteRegW, RegWriteM, RegWriteW,
-    ForwardAE,
-    ForwardBE
+  hu: HazardUnit port map(
+    RsD, RtD, RsE, RtE, WriteRegM, WriteRegW, RegWriteM, RegWriteW, MemToRegE,
+    ForwardAE, ForwardBE, StallF, StallD, FlushE
   );
  
 end;
@@ -916,20 +929,27 @@ library ieee;
 use ieee.std_logic_1164.all;
 
 entity HazardUnit is
-  port (RsE:        in std_logic_vector(4 downto 0);
+  port (RsD:        in std_logic_vector(4 downto 0);
+        RtD:        in std_logic_vector(4 downto 0);
+        RsE:        in std_logic_vector(4 downto 0);
         RtE:        in std_logic_vector(4 downto 0);
         WriteRegM:  in std_logic_vector(4 downto 0);
         WriteRegW:  in std_logic_vector(4 downto 0);
         RegWriteM:  in std_logic;
         RegWriteW:  in std_logic;
+        MemToRegE:  in std_logic;
 
         ForwardAE: out std_logic_vector(1 downto 0);
-        ForwardBE: out std_logic_vector(1 downto 0)
+        ForwardBE: out std_logic_vector(1 downto 0);
+        StallF:    out std_logic;
+        StallD:    out std_logic;
+        FlushE:    out std_logic
   );
 end;
 
 architecture behave of HazardUnit is
 begin
+  -- data hazard: forwarding
   process(RsE, RtE, WriteRegW, WriteRegM)
   begin
     if((RsE /= "0000") and (RsE = WriteRegM) and (RegWriteM = '1')) then
@@ -938,6 +958,20 @@ begin
       ForwardAE <= "01";
     else
       ForwardAE <= "00";
+    end if;
+  end process;
+
+  -- data hazard: stalling
+  process(RsD, RtD, RtE, MemToRegE)
+  begin
+    if ((((RsD = RtE) or (RtD = RtE)) and (MemToRegE = '1'))) then
+      StallF <= '1';
+      StallD <= '1';
+      FlushE <= '1';
+    else
+      StallF <= '0';
+      StallD <= '0';
+      FlushE <= '0';
     end if;
   end process;
 end;
