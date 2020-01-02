@@ -559,7 +559,6 @@ begin
   immsh: sl2 port map(SignImmD, SignImmShD);
   pcadd2: adder port map(PCPlus4D, SignImmShD, PCBranchD);
   
-
   regpipe2: regaux2 generic map(32) port map(clk, FlushE,
     regwrite, memtoreg, memwrite, alucontrol, alusrc, regdst,
     RD1D, RD2D, RsD, RtD, RdD, SignImmD, PCPlus4D,
@@ -984,7 +983,7 @@ begin
   begin
     if RsE /= "00000" and RsE = WriteRegM and RegWriteM = '1' then
       ForwardAE <= "10";
-    elsif RsE /= "00000" and RsE = WriteRegM and RegWriteW = '1' then
+    elsif RsE /= "00000" and RsE = WriteRegW and RegWriteW = '1' then
       ForwardAE <= "01";
     else
       ForwardAE <= "00";
@@ -992,7 +991,7 @@ begin
 
     if RtE /= "00000" and RtE = WriteRegM and RegWriteM = '1' then
       ForwardBE <= "10";
-    elsif RtE /= "00000" and RtE = WriteRegM and RegWriteW = '1' then
+    elsif RtE /= "00000" and RtE = WriteRegW and RegWriteW = '1' then
       ForwardBE <= "01";
     else
       ForwardBE <= "00";
