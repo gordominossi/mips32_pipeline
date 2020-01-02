@@ -469,6 +469,7 @@ component HazardUnit
         MemToRegE:  in std_logic;
         MemToRegM:  in std_logic;
         BranchD:    in std_logic;
+        Branch_NED: in std_logic;
         RegWriteE:  in std_logic;
 
         ForwardAD: out std_logic;
@@ -599,7 +600,7 @@ begin
   -- HU
 
   hu: HazardUnit port map(
-    RsD, RtD, RsE, RtE, WriteRegM, WriteRegW, WriteRegE, RegWriteM, RegWriteW, MemToRegE, MemToRegM, Branch, RegWriteE,
+    RsD, RtD, RsE, RtE, WriteRegM, WriteRegW, WriteRegE, RegWriteM, RegWriteW, MemToRegE, MemToRegM, Branch, Branch_NE, RegWriteE,
     ForwardAD, ForwardBD, ForwardAE, ForwardBE, StallF, StallD, FlushE
   );
  
@@ -961,6 +962,7 @@ entity HazardUnit is
         MemToRegE:  in std_logic;
         MemToRegM:  in std_logic;
         BranchD:    in std_logic;
+        Branch_NED: in std_logic;
         RegWriteE:  in std_logic;
 
         ForwardAD: out std_logic;
@@ -973,6 +975,9 @@ entity HazardUnit is
 end;
 
 architecture behave of HazardUnit is
+
+  signal lwstall, branchstall: std_logic;
+
 begin
   -- forwarding
   process(RsE, RtE, RsD, RtD, WriteRegW, WriteRegM, RegWriteM)
@@ -998,11 +1003,12 @@ begin
   end process;
 
   -- stalling
-  process(RsD, RtD, RtE, MemToRegE, MemToRegM, BranchD, RegWriteE, WriteRegE, WriteRegM)
+  process(RsD, RtD, RtE, MemToRegE, MemToRegM, BranchD, Branch_NED, RegWriteE, WriteRegE, WriteRegM)
   begin
-    if ((RsD = RtE or RtD = RtE) and MemToRegE = '1') or
-        (BranchD = '1' and RegWriteE = '1' and (WriteRegE = RsD or WriteRegE = RtD)) or 
-        (BranchD = '1' and MemToRegM = '1' and (WriteRegM = RsD or WriteRegM = RtD)) then
+    lwstall <= '1' when (RsD = RtE or RtD = RtE) and MemToRegE = '1' else '0';
+    branchstall <= '1' when ((BranchD = '1' or Branch_NED = '1') and RegWriteE = '1' and (WriteRegE = RsD or WriteRegE = RtD)) or 
+                            ((BranchD = '1' or Branch_NED = '1') and MemToRegM = '1' and (WriteRegM = RsD or WriteRegM = RtD)) else '0';
+    if lwstall or branchstall then
       StallF <= '1';
       StallD <= '1';
       FlushE <= '1';
