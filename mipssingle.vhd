@@ -371,6 +371,7 @@ architecture struct of datapath is
     generic(W : integer);
     port (clk         : in std_logic;
           en          : in std_logic;
+          clr         : in std_logic;
 
           RD          : in std_logic_vector(W-1 downto 0);
           
@@ -383,13 +384,11 @@ architecture struct of datapath is
   component regaux2
     generic(W : integer);
     port (clk         : in std_logic;
-          en          : in std_logic;
+          clr         : in std_logic;
 
           RegWriteD   : in std_logic;
           MemtoRegD   : in std_logic;
           MemWriteD   : in std_logic;
-          BranchD     : in std_logic;
-          Branch_NED  : in std_logic;
           ALUControlD : in std_logic_vector(2 downto 0);
           ALUSrcD     : in std_logic;
           RegDstD     : in std_logic;
@@ -405,8 +404,6 @@ architecture struct of datapath is
           RegWriteE   : out std_logic;
           MemtoRegE   : out std_logic;
           MemWriteE   : out std_logic;
-          BranchE     : out std_logic;
-          Branch_NEE  : out std_logic;
           ALUControlE : out std_logic_vector(2 downto 0);
           ALUSrcE     : out std_logic;
           RegDstE     : out std_logic;
@@ -422,31 +419,24 @@ end component;
 component regaux3
   generic(W : integer);
   port (clk           : in std_logic;
-        clr           : in std_logic;
 
         RegWriteE     : in std_logic;
         MemtoRegE     : in std_logic;
         MemWriteE     : in std_logic;
-        BranchE       : in std_logic;
-        Branch_NEE    : in std_logic;
         
         ZeroE         : in std_logic;
         ALUOutE       : in std_logic_vector(W-1 downto 0);
         WriteDataE    : in std_logic_vector(W-1 downto 0);
         WriteRegE     : in std_logic_vector(4 downto 0);
-        PcBranchE     : in std_logic_vector(W-1 downto 0);
         
         RegWriteM     : out std_logic;
         MemtoRegM     : out std_logic;
         MemWriteM     : out std_logic;
-        BranchM       : out std_logic;
-        Branch_NEM    : out std_logic;
         
         ZeroM         : out std_logic;
         ALUOutM       : out std_logic_vector(W-1 downto 0);
         WriteDataM    : out std_logic_vector(W-1 downto 0);
-        WriteRegM     : out std_logic_vector(4 downto 0);
-        PcBranchM     : out std_logic_vector(W-1 downto 0));
+        WriteRegM     : out std_logic_vector(4 downto 0));
 end component;
 component regaux4
   generic(W : integer);
@@ -473,10 +463,17 @@ component HazardUnit
         RtE:        in std_logic_vector(4 downto 0);
         WriteRegM:  in std_logic_vector(4 downto 0);
         WriteRegW:  in std_logic_vector(4 downto 0);
+        WriteRegE:  in std_logic_vector(4 downto 0);
         RegWriteM:  in std_logic;
         RegWriteW:  in std_logic;
         MemToRegE:  in std_logic;
+        MemToRegM:  in std_logic;
+        BranchD:    in std_logic;
+        Branch_NED: in std_logic;
+        RegWriteE:  in std_logic;
 
+        ForwardAD: out std_logic;
+        ForwardBD: out std_logic;
         ForwardAE: out std_logic_vector(1 downto 0);
         ForwardBE: out std_logic_vector(1 downto 0);
         StallF:    out std_logic;
@@ -490,57 +487,57 @@ component mux3 is -- three-input multiplexer
        
        y:          out STD_LOGIC_VECTOR(width-1 downto 0));
 end component;
+component comparator is
+  generic (N: integer);
+  port(A, B:   in  STD_LOGIC_VECTOR(N-1 downto 0);
+       equals: out STD_LOGIC);
+end component;
 
-  signal pcjump, pcnext,
-         pcnextbr, PCPlus4F,
-         pcbranch, PCF:         STD_LOGIC_VECTOR(31 downto 0);
-  signal StallF:                STD_LOGIC;
+  signal pcjump, pcnext, pcnextbr, 
+         PCPlus4F, pcbranch, PCF:  STD_LOGIC_VECTOR(31 downto 0);
+  signal StallF:                   STD_LOGIC;
 
-  signal SignImmD, RD1D, 
-         RD2D, InstrD,
-         PCPlus4D:              STD_LOGIC_VECTOR(31 downto 0);
-  signal StallD:                STD_LOGIC;
-  signal RsD, RtD, RdD:         STD_LOGIC_VECTOR(4 downto 0);
+  signal SignImmD, RD1D, RD2D, 
+         InstrD, PCPlus4D, 
+         SignImmShD, PCBranchD,
+         CompAD, CompBD:           STD_LOGIC_VECTOR(31 downto 0);
+  signal StallD, PCSrcD, EqualD,
+         ForwardAD, ForwardBD:     STD_LOGIC;
+  signal RsD, RtD, RdD:            STD_LOGIC_VECTOR(4 downto 0);
 
   signal RegWriteE, MemToRegE,
-         MemWriteE, BranchE,
-         Branch_NEE,
-         ALUSrcE, RegDstE,
-         ZeroE, FlushE:         STD_LOGIC;
-  signal ALUControlE:           STD_LOGIC_VECTOR(2 downto 0);
+         MemWriteE, ALUSrcE, 
+         RegDstE, ZeroE, FlushE:   STD_LOGIC;
+  signal ALUControlE:              STD_LOGIC_VECTOR(2 downto 0);
   signal RD1E, SrcBE, ALUOutE,
-         RD2E, SignImmE,
-         SignImmShE, PCPlus4E,
-         PCBranchE, ForwardedAE,
-         ForwardedBE:           STD_LOGIC_VECTOR(31 downto 0);
+         RD2E, SignImmE, PCPlus4E, 
+         ForwardedAE, ForwardedBE: STD_LOGIC_VECTOR(31 downto 0);
   signal RsE, RtE, RdE,
-         WriteRegE:             STD_LOGIC_VECTOR(4 downto 0);
-  signal ForwardAE, ForwardBE:  STD_LOGIC_VECTOR(1 downto 0);
+         WriteRegE:                STD_LOGIC_VECTOR(4 downto 0);
+  signal ForwardAE, ForwardBE:     STD_LOGIC_VECTOR(1 downto 0);
 
   signal ALUOutM, WriteDataM,
-         ReadDataM, PCBranchM:  STD_LOGIC_VECTOR(31 downto 0);
-  signal WriteRegM:             STD_LOGIC_VECTOR(4 downto 0);
+         ReadDataM:                STD_LOGIC_VECTOR(31 downto 0);
+  signal WriteRegM:                STD_LOGIC_VECTOR(4 downto 0);
   signal ZeroM, RegWriteM,
-         MemToRegM, MemWriteM, 
-         BranchM, Branch_NEM,
-         PCSrcM:                STD_LOGIC;
+         MemToRegM, MemWriteM:     STD_LOGIC;
 
-  signal RegWriteW, MemToRegW:  STD_LOGIC;
+  signal RegWriteW, MemToRegW:     STD_LOGIC;
   signal ALUOutW, ReadDataW,
-         ResultW:               STD_LOGIC_VECTOR(31 downto 0);
-  signal WriteRegW:             STD_LOGIC_VECTOR(4 downto 0);
+         ResultW:                  STD_LOGIC_VECTOR(31 downto 0);
+  signal WriteRegW:                STD_LOGIC_VECTOR(4 downto 0);
 begin
 
   -- IF
 
-  pcbrmux: mux2 generic map(32) port map(PCPlus4F, PCBranchM, PCSrcM, pcnextbr);
+  pcbrmux: mux2 generic map(32) port map(PCPlus4F, PCBranchD, PCSrcD, pcnextbr);
   pcjump <= PCPlus4D(31 downto 28) & InstrD(25 downto 0) & "00";
   pcmux: mux2 generic map(32) port map(pcnextbr, pcjump, jump, pcnext);
   pcreg: flopr generic map(32) port map(clk, reset, StallF, pcnext, PCF);
   pc <= PCF;
   pcadd1: adder port map(PCF, X"00000004", PCPlus4F);
 
-  regpipe1: regaux1 generic map(32) port map(clk, StallD, instr, PCPlus4F, InstrD, PCPlus4D);
+  regpipe1: regaux1 generic map(32) port map(clk, StallD, PCSrcD, instr, PCPlus4F, InstrD, PCPlus4D);
  
   -- ID
 
@@ -552,12 +549,20 @@ begin
     clk, regwrite, RsD, RtD, WriteRegW, ResultW,
     RD1D, RD2D
   );
-  se: signext port map(InstrD(15 downto 0), SignImmD);
 
-  regpipe2: regaux2 generic map(32) port map(clk, StallD,
-    regwrite, memtoreg, memwrite, Branch, Branch_NE, alucontrol, alusrc, regdst,
+  compamux: mux2 generic map(32) port map(RD1D, ALUOutM, ForwardAD, CompAD);
+  compbmux: mux2 generic map(32) port map(RD2D, ALUOutM, ForwardBD, CompBD);
+  comp: comparator generic map(32) port map(CompAD, CompBD, EqualD);
+  PCSrcD <= ((Branch and EqualD) or (Branch_NE and (not EqualD)));
+
+  se: signext port map(InstrD(15 downto 0), SignImmD);
+  immsh: sl2 port map(SignImmD, SignImmShD);
+  pcadd2: adder port map(PCPlus4D, SignImmShD, PCBranchD);
+  
+  regpipe2: regaux2 generic map(32) port map(clk, FlushE,
+    regwrite, memtoreg, memwrite, alucontrol, alusrc, regdst,
     RD1D, RD2D, RsD, RtD, RdD, SignImmD, PCPlus4D,
-    RegWriteE, MemToRegE, MemWriteE, BranchE, Branch_NEE, ALUControlE, ALUSrcE, RegDstE,
+    RegWriteE, MemToRegE, MemWriteE, ALUControlE, ALUSrcE, RegDstE,
     RD1E, RD2E, RsE, RtE, RdE, SignImmE, PCPlus4E
   );
 
@@ -571,19 +576,14 @@ begin
 
   wrmux: mux2 generic map(5) port map(RtE, RdE, RegDstE, WriteRegE);
 
-  immsh: sl2 port map(SignImmD, SignImmShE);
-  pcadd2: adder port map(PCPlus4D, SignImmShE, PCBranchE);
-
-  regpipe3: regaux3 generic map(32) port map(clk, FlushE,
-    RegWriteE, MemToRegE, MemWriteE, BranchE, Branch_NEE,
-    ZeroE, ALUOutE, ForwardedBE, WriteRegE, PCBranchE,
-    RegWriteM, MemToRegM, MemWriteM, BranchM, Branch_NEM,
-    ZeroM, ALUOutM, WriteDataM, WriteRegM, PCBranchM
+  regpipe3: regaux3 generic map(32) port map(clk,
+    RegWriteE, MemToRegE, MemWriteE,
+    ZeroE, ALUOutE, ForwardedBE, WriteRegE,
+    RegWriteM, MemToRegM, MemWriteM,
+    ZeroM, ALUOutM, WriteDataM, WriteRegM
   );
 
   -- MEM
-
-  PCSrcM <= ((BranchM and ZeroM) or (Branch_NEM and (not ZeroM)));
 
   regpipe4: regaux4 generic map(32) port map(clk,
     RegWriteM, MemToRegM,
@@ -599,8 +599,8 @@ begin
   -- HU
 
   hu: HazardUnit port map(
-    RsD, RtD, RsE, RtE, WriteRegM, WriteRegW, RegWriteM, RegWriteW, MemToRegE,
-    ForwardAE, ForwardBE, StallF, StallD, FlushE
+    RsD, RtD, RsE, RtE, WriteRegM, WriteRegW, WriteRegE, RegWriteM, RegWriteW, MemToRegE, MemToRegM, Branch, Branch_NE, RegWriteE,
+    ForwardAD, ForwardBD, ForwardAE, ForwardBE, StallF, StallD, FlushE
   );
  
 end;
@@ -693,8 +693,9 @@ end;
 architecture asynchronous of flopr is
 begin
   process(all) begin
-    if reset then  q <= (others => '0');
-    elsif (rising_edge(clk) and en = '0') then
+    if reset then  
+      q <= (others => '0');
+    elsif rising_edge(clk) and en = '0' then
       q <= d;
     end if;
   end process;
@@ -753,6 +754,7 @@ Entity regaux1 is
   Generic(W : integer);
   Port (clk         : in std_logic;
         en          : in std_logic;
+        clr         : in std_logic;
 
         RD          : in std_logic_vector(W-1 downto 0);
 
@@ -767,8 +769,12 @@ Architecture behave of regaux1 is
 begin
   process(all)
   begin
-    if(clk'event and clk = '1' and en = '0') then
-      InstrD <= RD;
+    if clr then
+      InstrD   <= (others => '0');
+      
+      PCPlus4D <= (others => '0');
+    elsif rising_edge(clk) and en = '0' then
+      InstrD   <= RD;
       
       PCPlus4D <= PCPlus4F;
     end if;
@@ -783,13 +789,11 @@ use ieee.std_logic_1164.all;
 Entity regaux2 is
   Generic(W : integer);
   Port (clk         : in std_logic;
-        en          : in std_logic;
+        clr         : in std_logic;
 
         RegWriteD   : in std_logic;
         MemtoRegD   : in std_logic;
         MemWriteD   : in std_logic;
-        BranchD     : in std_logic;
-        Branch_NED  : in std_logic;
         ALUControlD : in std_logic_vector(2 downto 0);
         ALUSrcD     : in std_logic;
         RegDstD     : in std_logic;
@@ -805,8 +809,6 @@ Entity regaux2 is
         RegWriteE   : out std_logic;
         MemtoRegE   : out std_logic;
         MemWriteE   : out std_logic;
-        BranchE     : out std_logic;
-        Branch_NEE  : out std_logic;
         ALUControlE : out std_logic_vector(2 downto 0);
         ALUSrcE     : out std_logic;
         RegDstE     : out std_logic;
@@ -824,12 +826,25 @@ Architecture behave of regaux2 is
 begin
   process(all)
   begin
-    if(clk'event and clk = '1') then
+    if clr then 
+      RegWriteE   <= '0';
+      MemtoRegE   <= '0';
+      MemWriteE   <= '0';
+      ALUControlE <= (others => '0');
+      ALUSrcE     <= '0';
+      RegDstE     <= '0';
+      
+      SrcAE       <= (others => '0');
+      WriteDataE  <= (others => '0');
+      RsE         <= (others => '0');
+      RtE         <= (others => '0');
+      RdE         <= (others => '0');
+      SignImmE    <= (others => '0');
+      PCPlus4E    <= (others => '0');
+    elsif rising_edge(clk) then
       RegWriteE   <= RegWriteD;
       MemtoRegE   <= MemtoRegD;
       MemWriteE   <= MemWriteD;
-      BranchE     <= BranchD;
-      Branch_NEE  <= Branch_NED;
       ALUControlE <= ALUControlD;
       ALUSrcE     <= ALUSrcD;
       RegDstE     <= RegDstD;
@@ -853,49 +868,39 @@ use ieee.std_logic_1164.all;
 Entity regaux3 is
   Generic(W : integer);
   Port (clk           : in std_logic;
-        clr           : in std_logic;
 
         RegWriteE     : in std_logic;
         MemtoRegE     : in std_logic;
         MemWriteE     : in std_logic;
-        BranchE       : in std_logic;
-        Branch_NEE    : in std_logic;
         
         ZeroE         : in std_logic;
         ALUOutE       : in std_logic_vector(W-1 downto 0);
         WriteDataE    : in std_logic_vector(W-1 downto 0);
         WriteRegE     : in std_logic_vector(4 downto 0);
-        PcBranchE     : in std_logic_vector(W-1 downto 0);
         
         RegWriteM     : out std_logic;
         MemtoRegM     : out std_logic;
         MemWriteM     : out std_logic;
-        BranchM       : out std_logic;
-        Branch_NEM    : out std_logic;
         
         ZeroM         : out std_logic;
         ALUOutM       : out std_logic_vector(W-1 downto 0);
         WriteDataM    : out std_logic_vector(W-1 downto 0);
-        WriteRegM     : out std_logic_vector(4 downto 0);
-        PcBranchM     : out std_logic_vector(W-1 downto 0));
+        WriteRegM     : out std_logic_vector(4 downto 0));
 end;
 
 Architecture behave of regaux3 is
 begin
   process(all)
   begin
-    if(clk'event and clk = '1') then
+    if rising_edge(clk) then
       RegWriteM  <= RegWriteE;
       MemtoRegM  <= MemtoRegE;
       MemWriteM  <= MemWriteE;
-      BranchM    <= BranchE;
-      Branch_NEM <= Branch_NEE;
       
       ZeroM      <= ZeroE;
       AluOutM    <= AluOutE;
       WriteDataM <= WriteDataE;
       WriteRegM  <= WriteRegE;
-      PcBranchM  <= PcBranchE;
     end if;
   end process;
 end;
@@ -928,7 +933,7 @@ Architecture behave of regaux4 is
 begin
   process(all)
   begin
-    if(clk'event and clk = '1') then
+    if rising_edge(clk) then
       RegWriteW <= RegWriteM;
       MemToRegW <= MemToRegM;
 
@@ -950,36 +955,59 @@ entity HazardUnit is
         RtE:        in std_logic_vector(4 downto 0);
         WriteRegM:  in std_logic_vector(4 downto 0);
         WriteRegW:  in std_logic_vector(4 downto 0);
+        WriteRegE:  in std_logic_vector(4 downto 0);
         RegWriteM:  in std_logic;
         RegWriteW:  in std_logic;
         MemToRegE:  in std_logic;
+        MemToRegM:  in std_logic;
+        BranchD:    in std_logic;
+        Branch_NED: in std_logic;
+        RegWriteE:  in std_logic;
 
+        ForwardAD: out std_logic;
+        ForwardBD: out std_logic;
         ForwardAE: out std_logic_vector(1 downto 0);
         ForwardBE: out std_logic_vector(1 downto 0);
         StallF:    out std_logic;
         StallD:    out std_logic;
-        FlushE:    out std_logic
-  );
+        FlushE:    out std_logic);
 end;
 
 architecture behave of HazardUnit is
+
+  signal lwstall, branchstall: std_logic;
+
 begin
-  -- data hazard: forwarding
-  process(RsE, RtE, WriteRegW, WriteRegM)
+  -- forwarding
+  process(RsE, RtE, RsD, RtD, WriteRegW, WriteRegM, RegWriteM)
   begin
-    if((RsE /= "0000") and (RsE = WriteRegM) and (RegWriteM = '1')) then
+    if RsE /= "00000" and RsE = WriteRegM and RegWriteM = '1' then
       ForwardAE <= "10";
-    elsif((RsE /= "0000") and (RsE = WriteRegM) and (RegWriteW = '1')) then
+    elsif RsE /= "00000" and RsE = WriteRegW and RegWriteW = '1' then
       ForwardAE <= "01";
     else
       ForwardAE <= "00";
     end if;
+
+    if RtE /= "00000" and RtE = WriteRegM and RegWriteM = '1' then
+      ForwardBE <= "10";
+    elsif RtE /= "00000" and RtE = WriteRegW and RegWriteW = '1' then
+      ForwardBE <= "01";
+    else
+      ForwardBE <= "00";
+    end if;
+
+    ForwardAD <= '1' when (RsD /= "00000") and RsD = WriteRegM and RegWriteM = '1' else '0';
+    ForwardBD <= '1' when (RtD /= "00000") and RtD = WriteRegM and RegWriteM = '1' else '0';
   end process;
 
-  -- data hazard: stalling
-  process(RsD, RtD, RtE, MemToRegE)
+  -- stalling
+  process(RsD, RtD, RtE, MemToRegE, MemToRegM, BranchD, Branch_NED, RegWriteE, WriteRegE, WriteRegM)
   begin
-    if ((((RsD = RtE) or (RtD = RtE)) and (MemToRegE = '1'))) then
+    lwstall <= '1' when (RsD = RtE or RtD = RtE) and MemToRegE = '1' else '0';
+    branchstall <= '1' when ((BranchD = '1' or Branch_NED = '1') and RegWriteE = '1' and (WriteRegE = RsD or WriteRegE = RtD)) or 
+                            ((BranchD = '1' or Branch_NED = '1') and MemToRegM = '1' and (WriteRegM = RsD or WriteRegM = RtD)) else '0';
+    if lwstall or branchstall then
       StallF <= '1';
       StallD <= '1';
       FlushE <= '1';
@@ -1008,4 +1036,19 @@ begin
     y <= d0 when "00",
          d1 when "01",
          d2 when others;
+end;
+
+
+library IEEE; use IEEE.STD_LOGIC_1164.all;
+
+entity comparator is
+  generic (N: integer);
+  port(A, B:   in  STD_LOGIC_VECTOR(N-1 downto 0);
+       equals: out STD_LOGIC
+  );
+end;
+
+architecture dataflow of comparator is
+begin
+  equals <= '1' when A = B else '0';
 end;
