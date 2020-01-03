@@ -470,6 +470,7 @@ component HazardUnit
         MemToRegM:  in std_logic;
         BranchD:    in std_logic;
         Branch_NED: in std_logic;
+        JumpD:      in std_logic;
         RegWriteE:  in std_logic;
 
         ForwardAD: out std_logic;
@@ -599,7 +600,7 @@ begin
   -- HU
 
   hu: HazardUnit port map(
-    RsD, RtD, RsE, RtE, WriteRegM, WriteRegW, WriteRegE, RegWriteM, RegWriteW, MemToRegE, MemToRegM, Branch, Branch_NE, RegWriteE,
+    RsD, RtD, RsE, RtE, WriteRegM, WriteRegW, WriteRegE, RegWriteM, RegWriteW, MemToRegE, MemToRegM, Branch, Branch_NE, jump, RegWriteE,
     ForwardAD, ForwardBD, ForwardAE, ForwardBE, StallF, StallD, FlushE
   );
  
@@ -962,6 +963,7 @@ entity HazardUnit is
         MemToRegM:  in std_logic;
         BranchD:    in std_logic;
         Branch_NED: in std_logic;
+        JumpD:      in std_logic;
         RegWriteE:  in std_logic;
 
         ForwardAD: out std_logic;
@@ -1005,8 +1007,8 @@ begin
   process(RsD, RtD, RtE, MemToRegE, MemToRegM, BranchD, Branch_NED, RegWriteE, WriteRegE, WriteRegM)
   begin
     lwstall <= '1' when (RsD = RtE or RtD = RtE) and MemToRegE = '1' else '0';
-    branchstall <= '1' when ((BranchD = '1' or Branch_NED = '1') and RegWriteE = '1' and (WriteRegE = RsD or WriteRegE = RtD)) or 
-                            ((BranchD = '1' or Branch_NED = '1') and MemToRegM = '1' and (WriteRegM = RsD or WriteRegM = RtD)) else '0';
+    branchstall <= '1' when ((BranchD = '1' or Branch_NED = '1' or JumpD = '1') and RegWriteE = '1' and (WriteRegE = RsD or WriteRegE = RtD)) or 
+                            ((BranchD = '1' or Branch_NED = '1' or JumpD = '1') and MemToRegM = '1' and (WriteRegM = RsD or WriteRegM = RtD)) else '0';
     if lwstall or branchstall then
       StallF <= '1';
       StallD <= '1';
