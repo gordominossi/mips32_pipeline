@@ -187,10 +187,10 @@ architecture struct of mips is
          pcsrc, alusrc:      out std_logic;
          regdst, regwrite:   out std_logic;
          jump:               out std_logic;
-		 branch, branchn:  out std_logic;
+         branch, branchn:    out std_logic;
          alucontrol:         out std_logic_vector(2 downto 0));
   end component;
-  
+
   component datapath
     port(clk, reset:        in  std_logic;
          memtoreg, pcsrc:   in  std_logic;
@@ -203,9 +203,9 @@ architecture struct of mips is
          instr:             in std_logic_vector(31 downto 0);
          aluout, writedata: buffer std_logic_vector(31 downto 0);
          readdata:          in  std_logic_vector(31 downto 0);
-		 branch, branchn: in  STD_LOGIC);
+     branch, branchn: in  STD_LOGIC);
   end component;
-  
+
   signal memtoreg, alusrc, regdst, regwrite, jump, pcsrc: std_logic;
   signal zero, s_branch, s_branchn: std_logic;
   signal alucontrol: std_logic_vector(2 downto 0);
@@ -227,7 +227,7 @@ entity controller is -- single cycle control decoder
        pcsrc, alusrc:      out std_logic;
        regdst, regwrite:   out std_logic;
        jump:               out std_logic;
-	   branch, branchn:  out std_logic;
+       branch, branchn:    out std_logic;
        alucontrol:         out std_logic_vector(2 downto 0));
 end;
 
@@ -235,8 +235,8 @@ architecture struct of controller is
   component maindec
     port(op:                 in  std_logic_vector(5 downto 0);
          memtoreg, memwrite: out std_logic;
-         branch, branchn:  out std_logic;
-		 alusrc: 			 out std_logic;
+         branch, branchn:    out std_logic;
+         alusrc: 			       out std_logic;
          regdst, regwrite:   out std_logic;
          jump:               out std_logic;
          aluop:              out std_logic_vector(1 downto 0));
@@ -248,7 +248,7 @@ architecture struct of controller is
   end component;
   signal aluop:  std_logic_vector(1 downto 0);
   signal s_branch, s_branchn: std_logic;
-  
+
 begin
   md: maindec port map(op, memtoreg, memwrite, s_branch, s_branchn,
                        alusrc, regdst, regwrite, jump, aluop);
@@ -265,8 +265,8 @@ library IEEE; use IEEE.STD_LOGIC_1164.all;
 entity maindec is -- main control decoder
   port(op:                 in  std_logic_vector(5 downto 0);
        memtoreg, memwrite: out std_logic;
-       branch, branchn:  out std_logic;
-	   alusrc:    		   out std_logic;
+       branch, branchn:    out std_logic;
+       alusrc:    		     out std_logic;
        regdst, regwrite:   out std_logic;
        jump:               out std_logic;
        aluop:              out std_logic_vector(1 downto 0));
@@ -283,8 +283,8 @@ begin
       when "000100" => controls <= "0000100001"; -- BEQ
       when "001000" => controls <= "0101000000"; -- ADDI
       when "000010" => controls <= "0000000100"; -- J
-	  when "001101" => controls <= "0101000011"; -- ORI
-	  when "000101" => controls <= "1000000001"; -- BNE
+      when "001101" => controls <= "0101000011"; -- ORI
+      when "000101" => controls <= "1000000001"; -- BNE
       when others   => controls <= "----------"; -- illegal op
     end case;
   end process;
@@ -310,7 +310,7 @@ begin
     case aluop is
       when "00" => alucontrol <= "010"; -- add (for lw/sw/addi)
       when "01" => alucontrol <= "110"; -- sub (for beq)
-	  when "11" => alucontrol <= "001"; -- or (for ori)
+    when "11" => alucontrol <= "001"; -- or (for ori)
       when others => case funct is      -- R-type instructions
                          when "100000" => alucontrol <= "010"; -- add
                          when "100010" => alucontrol <= "110"; -- sub
@@ -337,7 +337,7 @@ entity datapath is  -- MIPS datapath
       instr:              in  std_logic_vector(31 downto 0);
       aluout, writedata:  buffer std_logic_vector(31 downto 0);
       readdata:           in  std_logic_vector(31 downto 0);
-	  branch, branchn:  in std_logic);
+      branch, branchn:    in std_logic);
 end;
 
 architecture struct of datapath is
@@ -348,6 +348,7 @@ architecture struct of datapath is
       PCsrcM:         in std_logic;
       PCbranchM:		  in std_logic_vector(31 downto 0);
       stallF:         in std_logic;
+
       PCplus4F:       out std_logic_vector(31 downto 0);
       instrF:         out std_logic_vector(31 downto 0)
     );
@@ -355,7 +356,7 @@ architecture struct of datapath is
 
   component regaux1
     port(
-        clock, clear:         in std_logic; 
+        clock, clear:         in std_logic;
         stallD:	              in std_logic;
         PCplus4F, instrF:	  	in std_logic_vector(31 downto 0);
         PCplus4D, instrD:		  out std_logic_vector(31 downto 0));
@@ -363,49 +364,44 @@ architecture struct of datapath is
 
   component decode
     port (
-      -- entradas
       clock, reset:       in std_logic;
       regWriteW:          in std_logic;
       writeRegW:          in std_logic_vector(4 downto 0);
       instrD, PCplus4Din: in std_logic_vector(31 downto 0);
       resultW:            in std_logic_vector(31 downto 0);
-      -- saidas
+
       PCplus4Dout:        out std_logic_vector(31 downto 0);
       RD1, RD2:           out std_logic_vector(31 downto 0);
       signImmD:           out std_logic_vector(31 downto 0);
       opcode, funct:      out std_logic_vector(5 downto 0);
       rsD, rtD, rdD:      out std_logic_vector(4 downto 0)
     );
-  end component;  
+  end component;
 
   component regaux2
     port (
       clock, flushE: in std_logic;
-      -- fluxo de dados:
-        -- entradas
         PCplus4D:       in std_logic_vector(31 downto 0);
-        signImmD:       in std_logic_vector(31 downto 0); 
+        signImmD:       in std_logic_vector(31 downto 0);
         rd1D, rd2D:     in std_logic_vector(31 downto 0);
         rsD, rtD, rdD:  in std_logic_vector(4 downto 0);
-        -- saidas
+
         PCplus4E:       out std_logic_vector(31 downto 0);
-        signImmE:       out std_logic_vector(31 downto 0); 
+        signImmE:       out std_logic_vector(31 downto 0);
         rd1E, rd2E:     out std_logic_vector(31 downto 0);
         rsE, rtE, rdE:  out std_logic_vector(4 downto 0);
-  
-      -- unidade de controle:
-        -- entradas
+
         regWriteD:      in std_logic;
         memToRegD: 	    in std_logic;
-        memWriteD:      in std_logic; 
+        memWriteD:      in std_logic;
         branchD:        in std_logic;
         ALUControlD:		in std_logic_vector(2 downto 0);
         ALUSrcD: 		    in std_logic;
         regDstD: 				in std_logic;
-        -- saidas
+
         regWriteE:      out std_logic;
         memToRegE: 	    out std_logic;
-        memWriteE:      out std_logic; 
+        memWriteE:      out std_logic;
         branchE:        out std_logic;
         ALUControlE:		out std_logic_vector(2 downto 0);
         ALUSrcE: 		    out std_logic;
@@ -415,9 +411,7 @@ architecture struct of datapath is
 
   component execute
     port (
-      clock:            in std_logic;
-      -- entradas
-        -- fluxo de dados:
+        clock:                in std_logic;
         rtE, rdE:             in std_logic_vector(4 downto 0);
         rd1E, rd2E:           in std_logic_vector(31 downto 0);
         signImmE:             in std_logic_vector(31 downto 0);
@@ -425,11 +419,11 @@ architecture struct of datapath is
         resultW:              in std_logic_vector(31 downto 0);
         ALUOutM:              in std_logic_vector(31 downto 0);
         forwardAE, forwardBE: in std_logic_vector(1 downto 0);
-        -- unidade de controle:
+
         regDstE:              in std_logic;
         ALUSrcE:              in std_logic;
         ALUControlE:          in std_logic_vector(2 downto 0);
-      -- saidas
+
         zeroE:                out std_logic;
         ALUOutE:              out std_logic_vector(31 downto 0);
         writeDataE:           out std_logic_vector(31 downto 0);
@@ -440,30 +434,27 @@ architecture struct of datapath is
 
   component regaux3
     port (
-    clock, clear:            in std_logic;
-    -- fluxo de dados
-      -- entradas
+      clock, clear:   in std_logic;
       zeroE:          in std_logic;
       ALUoutE:        in std_logic_vector(31 downto 0);
       writeDataE:     in std_logic_vector(31 downto 0);
       writeRegE:      in std_logic_vector(4 downto 0);
       PCbranchE:      in std_logic_vector(31 downto 0);
-      -- saidas
+
       zeroM:          out std_logic;
       ALUoutM:        out std_logic_vector(31 downto 0);
       writeDataM:     out std_logic_vector(31 downto 0);
       writeRegM:      out std_logic_vector(4 downto 0);
       PCbranchM:      out std_logic_vector(31 downto 0);
-    -- unidade de controle
-      -- entradas
+
       regWriteE:      in std_logic;
       memToRegE: 	    in std_logic;
-      memWriteE:      in std_logic; 
+      memWriteE:      in std_logic;
       branchE:        in std_logic;
-      -- saidas
+
       regWriteM:      out std_logic;
       memToRegM: 	    out std_logic;
-      memWriteM:      out std_logic; 
+      memWriteM:      out std_logic;
       branchM:        out std_logic
     );
   end component;
@@ -471,39 +462,34 @@ architecture struct of datapath is
   component memory
     port (
       clock:            in std_logic;
-      -- entradas
-        -- fluxo de dados:
         ALUOutM:        in std_logic_vector(31 downto 0);
         writeDataM:     in std_logic_vector(31 downto 0);
         writeRegM:      in std_logic_vector(4 downto 0);
         PCbranchM:      in std_logic_vector(31 downto 0);
-        -- unidade de controle:
+
         memWriteM:      in std_logic;
-      -- saidas
+
         ALUOutW:        out std_logic_vector(31 downto 0);
         rdM:            out std_logic_vector(31 downto 0);
-        writeRegW:      out std_logic_vector(4 downto 0); 
+        writeRegW:      out std_logic_vector(4 downto 0);
         PCbranchF:      out std_logic_vector(31 downto 0)
     );
   end component;
 
   component regaux4
     port (
-    clock, clear:            in std_logic;
-    -- fluxo de dados
-      -- entradas
+      clock, clear:   in std_logic;
       ALUOutM:        in std_logic_vector(31 downto 0);
       rdM:            in std_logic_vector(31 downto 0);
-      writeRegM:      in std_logic_vector(4 downto 0); 
-      -- saidas
+      writeRegM:      in std_logic_vector(4 downto 0);
+
       ALUOutW:        out std_logic_vector(31 downto 0);
       readDataW:      out std_logic_vector(31 downto 0);
-      writeRegW:      out std_logic_vector(4 downto 0); 
-    -- unidade de controle
-      -- entradas
+      writeRegW:      out std_logic_vector(4 downto 0);
+
       regWriteM:      in std_logic;
       memToRegM: 	    in std_logic;
-      -- saidas
+
       regWriteW:      out std_logic;
       memToRegW: 	    out std_logic
     );
@@ -512,14 +498,12 @@ architecture struct of datapath is
   component writeback
     port (
       clock:            in std_logic;
-      -- entradas
-        -- fluxo de dados:
         ALUOutW:        in std_logic_vector(31 downto 0);
         readDataW:      in std_logic_vector(31 downto 0);
-        writeRegW_in:   in std_logic_vector(4 downto 0);       
-        -- unidade de controle:
+        writeRegW_in:   in std_logic_vector(4 downto 0);
+
         memToRegW: 	    in std_logic;
-      -- saidas
+
         resultW:        out std_logic_vector(31 downto 0);
         writeRegW_out:  out std_logic_vector(4 downto 0)
     );
@@ -527,21 +511,19 @@ architecture struct of datapath is
 
   component forwarding
     port (
-      -- entradas
       rsE, rtE:               in std_logic_vector (4 downto 0);
       writeRegM, writeRegW:   in std_logic_vector (4 downto 0);
       regWriteM, regWriteW:   in std_logic;
-      -- saidas
+
       forwardAE, forwardBE:   out std_logic_vector (1 downto 0)
     );
   end component;
 
   component stall_unit
     port (
-      -- entradas
       rsD, rtD, rtE:            in std_logic_vector (4 downto 0);
       memToRegE:                in std_logic;
-      -- saidas
+
       stallF, stallD, flushE:   out std_logic
     );
   end component;
@@ -587,6 +569,26 @@ architecture struct of datapath is
          s:      in  std_logic;
          y:      out std_logic_vector(width-1 downto 0));
   end component;
+  component imem
+    port(a:  in  std_logic_vector(5 downto 0);
+        rd: out std_logic_vector(31 downto 0));
+  end component;
+  component floprEN generic(width: integer);
+    port(clk, reset: 	in std_logic;
+        enable: 		    in std_logic;
+        d:          		in std_logic_vector(width-1 downto 0);
+        q:          		out std_logic_vector(width-1 downto 0));
+  end component;
+  component mux3 is generic(width: integer);
+    port(d0, d1, d2: in  STD_LOGIC_VECTOR(width-1 downto 0);
+       s:      in  STD_LOGIC_VECTOR(1 downto 0);
+       y:      out STD_LOGIC_VECTOR(width-1 downto 0));
+  end component;
+  component dmem
+    port(clk, we:  in std_logic;
+         a, wd:    in std_logic_vector(31 downto 0);
+         rd:       out std_logic_vector(31 downto 0));
+  end component;
   signal writereg:           std_logic_vector(4 downto 0);
   signal pcjump, pcnext,
          pcnextbr, pcplus4,
@@ -603,20 +605,19 @@ architecture struct of datapath is
   signal s_rsD, s_rtD, s_rdD:               std_logic_vector(4 downto 0);
   signal s_rd1E, s_rd2E, s_signImmE:        std_logic_vector(31 downto 0);
   signal s_rsE, s_rtE, s_rdE:               std_logic_vector(4 downto 0);
-  signal opcode, funct:                     std_logic_vector(5 downto 0);
   signal s_PCplus4E:                        std_logic_vector(31 downto 0);
   signal s_ALUControlE:                     std_logic_vector(2 downto 0);
-  signal s_regWriteE, s_memToRegE, 
-         s_memWriteE, s_branchE, s_ALUSrcE, 
+  signal s_regWriteE, s_memToRegE,
+         s_memWriteE, s_branchE, s_ALUSrcE,
          s_regDstE:                         std_logic;
-  signal s_ALUOutE, s_writeDataE:           std_logic_vector(31 downto 0); 
+  signal s_ALUOutE, s_writeDataE:           std_logic_vector(31 downto 0);
   signal s_PCbranchE:                       std_logic_vector(31 downto 0);
   signal s_writeRegE:                       std_logic_vector(4 downto 0);
   signal s_zeroE:                           std_logic;
   signal s_ALUoutM, s_writeDataM:           std_logic_vector(31 downto 0);
   signal s_PCbranchE_out:                   std_logic_vector(31 downto 0);
   signal s_writeRegM:                       std_logic_vector(4 downto 0);
-  signal s_regWriteM, s_memToRegM, 
+  signal s_regWriteM, s_memToRegM,
          s_memWriteM, s_branchM:            std_logic;
   signal s_ALUOutMout, s_rdM:               std_logic_vector(31 downto 0);
   signal s_writeRegMout:                    std_logic_vector(4 downto 0);
@@ -626,37 +627,86 @@ architecture struct of datapath is
   signal s_forwardAE, s_forwardBE:          std_logic_vector(1 downto 0);
   signal s_rsEout, s_rtEout:                std_logic_vector(4 downto 0);
   signal s_stallF, s_stallD, s_flushE:      std_logic;
+
+  signal s_enableF, s_enableD:              std_logic;
+  signal s_PCnext, s_PCF, signimme,
+         s_sl2out, s_srcAE, s_srcBE:        std_logic_vector(31 downto 0);
 begin
-  
-  instr_f: fetch port map (
-    clk, reset, pcsrc, s_PCbranchM, s_stallF, -- entradas
-    s_PCplus4F, s_instrF            -- saidas
-  );
+
+  -- IF
+
+
+  pcbrmux: mux2 generic map(32) port map(pcplus4, pcbranch, pcsrc, pcnextbr);
+  pcjump <= pcplus4(31 downto 28) & instr(25 downto 0) & "00";
+  pcmux: mux2 generic map(32) port map(pcnextbr, pcjump, jump, pcnext);
+  pcreg: flopr generic map(32) port map(clk, reset, pcnext, pc);
+  pcadd1: adder port map(pc, X"00000004", pcplus4);
+
+  s_enableF <= not s_stallF;
+
+  i_mem: imem port map (s_PCF(7 downto 2), s_instrF);
+
+  mux_branch: mux2 generic map (32)
+  port map (s_PCplus4F, s_PCbranchM, pcsrc, s_PCnext);
+
+  add_4: adder port map (s_PCF, X"00000004", s_PCplus4F);
+
+  reg_PCF: floprEN generic map(32)
+  port map (clk, reset, s_enableF, s_PCnext, s_PCF);
+
 
   ifid: regaux1 port map (
     clk, pcsrc, s_stallD, s_PCplus4F, s_instrF,   -- entradas
     s_PCplus4Din, s_instrD                   -- saidas
   );
 
-  id: decode port map (
-    clk, reset, s_regWriteW, s_writeRegW_out, s_instrD, s_PCplus4Din, s_resultW,      -- entradas
-    s_PCplus4Dout, s_rd1D, s_rd2D, s_signImmD, opcode, funct, s_rsD, s_rtD, s_rdD -- saidas
+  -- ID
+  rf: regfile port map(
+    clk, regwrite, instr(25 downto 21), instr(20 downto 16), writereg, result,
+    srca, writedata
   );
 
+  reg_file: regfile port map (
+    clk, s_regWriteW, s_instrD(25 downto 21), s_instrD(20 downto 16), s_writeRegW_out, s_resultW,
+    s_RD1D, s_RD2D
+  );
+
+  sign_ext: signext port map (s_instrD(15 downto 0), s_signImmD);
+
+  s_PCplus4Dout <= s_PCplus4Din;
+
+  s_rsD <= s_instrD(25 downto 21);
+  s_rtD <= s_instrD(20 downto 16);
+  s_rdD <= s_instrD(15 downto 11);
+
+
   idex: regaux2 port map (
-    -- fluxo de dados
     clk, s_flushE, s_PCplus4Dout, s_signImmD, s_rd1D, s_rd2D, s_rsD, s_rtD, s_rdD, -- entradas
-    s_PCplus4E, s_signImmE, s_rd1E, s_rd2E, s_rsE, s_rtE, s_rdE,                -- saidas
-    -- unidade de controle
+    s_PCplus4E, s_signImmE, s_rd1E, s_rd2E, s_rsE, s_rtE, s_rdE,                   -- saidas
     regwrite, memtoreg, memwrite, '0', alucontrol, alusrc, regdst,                        -- entradas
     s_regWriteE, s_memToRegE, s_memWriteE, s_branchE, s_ALUControlE, s_ALUSrcE, s_regDstE -- saidas
   );
 
-  ex: execute port map (
-    clk, s_rtE, s_rdE, s_rd1E, s_rd2E, s_signImmE, s_PCplus4E, s_resultW, s_ALUOutM, s_forwardAE, s_forwardBE, s_regDstE, s_ALUSrcE, s_ALUControlE, -- entradas
-    s_zeroE, s_ALUOutE, s_writeDataE, s_writeRegE, s_PCbranchE -- saidas 
+  -- EX
 
-  );
+  ula_ula: alu port map (s_srcAE, s_srcBE, s_ALUControlE, s_ALUOutE, s_zeroE);
+
+  muxALU: mux2 generic map (32)
+    port map (s_writeDataE, signImmE, s_ALUSrcE, s_srcBE);
+
+  muxReg: mux2 generic map (5)
+    port map (s_rtE, s_rdE, s_regDstE, s_writeRegE);
+
+  shiftl2: sl2 port map (s_signImmE, s_SL2out);
+
+  add: adder port map (s_SL2out, s_PCplus4E, s_PCbranchE);
+
+  mux_forwA: mux3 generic map (32)
+    port map (s_rd1E, s_resultW, s_ALUOutM, s_forwardAE, s_srcAE);
+
+  mux_forwB: mux3 generic map (32)
+    port map (s_rd2E, s_resultW, s_ALUOutM, s_forwardBE, s_writeDataE);
+
 
   exmem: regaux3 port map (
     -- fluxo de dados
@@ -667,10 +717,13 @@ begin
     s_regWriteM, s_memToRegM, s_memWriteM, s_branchM  -- saidas
   );
 
-  mem: memory port map (
-    clk, s_ALUOutMout, s_writeDataM, s_writeRegM, s_PCbranchE_out, s_memWriteM, -- entradas
-    s_ALUOutW, s_rdM, s_writeRegMout, s_PCbranchM                           -- saidas
-  );
+  -- MEM
+
+  data_memory: dmem port map(clk, s_memWriteM, s_ALUOutW, s_writeDataM, s_rdM);
+
+  s_PCbranchM <= s_PCbranchE_out;
+  s_writeRegMout <= s_writeRegM;
+
 
   memwb: regaux4 port map (
     -- fluxo de dados
@@ -681,12 +734,14 @@ begin
     s_regWriteW, s_memToRegW  -- saidas
   );
 
-  wb: writeback port map (
-    clk, s_ALUOutW, s_readDataW, s_writeRegW, s_memToRegW, -- entradas
-    s_resultW, s_writeRegW_out                             -- saidas
-  );
+  -- WB
 
-  frw: forwarding port map (
+  mux_result: mux2 generic map(32) port map (s_ALUOutW, s_readDataW, s_memToRegW, s_resultW);
+  s_writeRegW_out <= s_writeRegW;
+
+  -- HU
+
+  forward: forwarding port map (
     s_rsE, s_rtE, s_writeRegM, s_writeRegW, s_regWriteM, s_regWriteW, -- entradas
     s_forwardAE, s_forwardBE -- saidas
   );
@@ -695,23 +750,17 @@ begin
     s_rsD, s_rtD, s_rtE, s_memToRegE, -- entradas
     s_stallF, s_stallD, s_flushE      -- saidas
   );
+
   -- next PC logic
-  pcjump <= pcplus4(31 downto 28) & instr(25 downto 0) & "00";
-  pcreg: flopr generic map(32) port map(clk, reset, pcnext, pc);
-  pcadd1: adder port map(pc, X"00000004", pcplus4);
   immsh: sl2 port map(signimm, signimmsh);
   pcadd2: adder port map(pcplus4, signimmsh, pcbranch);
-  pcbrmux: mux2 generic map(32) port map(pcplus4, pcbranch,
-                                         pcsrc, pcnextbr);
-  pcmux: mux2 generic map(32) port map(pcnextbr, pcjump, jump, pcnext);
+
 
   -- register file logic
-  rf: regfile port map(clk, regwrite, instr(25 downto 21),
-                       instr(20 downto 16), writereg, result, srca,
-				writedata);
-				
+
+
   ju: jump_unit port map(srca, writedata, zero);
-  
+
   wrmux: mux2 generic map(5) port map(instr(20 downto 16),
                                       instr(15 downto 11),
                                       regdst, writereg);
@@ -846,8 +895,8 @@ end;
 architecture behave of mux3 is
 begin
     with s select
-    y <= d0 when "00", 
-         d1 when "01", 
+    y <= d0 when "00",
+         d1 when "01",
          d2 when others;
 end behave;
 
@@ -881,18 +930,15 @@ begin
 end;
 
 
--- Aqui comecam as minhas modificacoes @Theo
-
-library IEEE; use IEEE.STD_LOGIC_1164.all; 
+library IEEE; use IEEE.STD_LOGIC_1164.all;
 
 entity fetch is
   port (
-    -- entradas
     clock, reset:   in std_logic;
     PCsrcM:         in std_logic;
     PCbranchM:		  in std_logic_vector(31 downto 0);
     stallF:         in std_logic;
-    -- saidas
+
     PCplus4F:       out std_logic_vector(31 downto 0);
     instrF:         out std_logic_vector(31 downto 0)
   );
@@ -905,24 +951,24 @@ architecture struct of fetch is
         y:    out std_logic_vector(31 downto 0));
   end component;
 
-	component mux2 generic(width: integer);
-		port(d0, d1: in  std_logic_vector(width-1 downto 0);
-				s:      in  std_logic;
-				y:      out std_logic_vector(width-1 downto 0));
+  component mux2 generic(width: integer);
+    port(d0, d1: in  std_logic_vector(width-1 downto 0);
+        s:      in  std_logic;
+        y:      out std_logic_vector(width-1 downto 0));
   end component;
-  
-	component floprEN generic(width: integer);
-		port(clk, reset: 	in std_logic;
-				enable: 		    in std_logic;
-				d:          		in std_logic_vector(width-1 downto 0);
-				q:          		out std_logic_vector(width-1 downto 0));
-	end component;
-  
-	component imem
-		port(a:  in  std_logic_vector(5 downto 0);
-				rd: out std_logic_vector(31 downto 0));
+
+  component floprEN generic(width: integer);
+    port(clk, reset: 	in std_logic;
+        enable: 		    in std_logic;
+        d:          		in std_logic_vector(width-1 downto 0);
+        q:          		out std_logic_vector(width-1 downto 0));
   end component;
-  
+
+  component imem
+    port(a:  in  std_logic_vector(5 downto 0);
+        rd: out std_logic_vector(31 downto 0));
+  end component;
+
   signal s_PCsrcM, s_enable: std_logic;
   signal s_PCnext, s_PCF, s_PCbranchM, s_PCplus4F, s_instrF: std_logic_vector(31 downto 0);
 
@@ -936,42 +982,42 @@ begin
   i_mem: imem port map (s_PCF(7 downto 2), s_instrF);
 
   -- faz decisão de branch
-  mux_branch: mux2 generic map (32) 
-	port map (s_PCplus4F, s_PCbranchM, s_PCsrcM, s_PCnext);
+  mux_branch: mux2 generic map (32)
+  port map (s_PCplus4F, s_PCbranchM, s_PCsrcM, s_PCnext);
 
   -- soma 4 ao Program Counter
   add_4: adder port map (s_PCF, X"00000004", s_PCplus4F);
 
   -- Guarda Program Counter, no registrador reg_PCF, para acesso do Stall
   reg_PCF: floprEN generic map(32)
-	port map (clock, reset, s_enable, s_PCnext, s_PCF);
-  
+  port map (clock, reset, s_enable, s_PCnext, s_PCF);
+
   PCplus4F <= s_PCplus4F;
   instrF <= s_instrF;
 
 end;
 
-library IEEE; use IEEE.STD_LOGIC_1164.all; 
+library IEEE; use IEEE.STD_LOGIC_1164.all;
 
 entity regaux1 is
-	port(
+  port(
       -- entradas
       clock, clear:         in std_logic;
       stallD:	              in std_logic;
       PCplus4F, instrF:	  	in std_logic_vector(31 downto 0);
       -- saidas
-			PCplus4D, instrD:		  out std_logic_vector(31 downto 0));
+      PCplus4D, instrD:		  out std_logic_vector(31 downto 0));
 end;
 
-architecture struct of regaux1 is 
+architecture struct of regaux1 is
 
-	component floprEN generic(width: integer);
-		port(
+  component floprEN generic(width: integer);
+    port(
         clk, reset: 	in std_logic;
-				enable: 		in std_logic;
-				d:          		in std_logic_vector(width-1 downto 0);
-				q:          		out std_logic_vector(width-1 downto 0));
-	end component;
+        enable: 		in std_logic;
+        d:          		in std_logic_vector(width-1 downto 0);
+        q:          		out std_logic_vector(width-1 downto 0));
+  end component;
 
   signal s_enable:  std_logic;
 begin
@@ -981,17 +1027,17 @@ begin
   -- passa o PCplus4 do fetch pra o decode
   reg_PCplus4: floprEN generic map(32)
     port map (clock, clear, s_enable, PCplus4F, PCplus4D);
-    
+
   -- passa a instr do fetch pra o decode
   reg_instr: floprEN generic map(32)
     port map (clock, clear, s_enable, instrF, instrD);
 
 end;
 
-library IEEE; use IEEE.STD_LOGIC_1164.all; 
+library IEEE; use IEEE.STD_LOGIC_1164.all;
 
-entity decode is 
-  
+entity decode is
+
   port (
     -- entradas
     clock, reset:       in std_logic;
@@ -1008,43 +1054,43 @@ entity decode is
   );
 end;
 
-architecture struct of decode is 
+architecture struct of decode is
 
-	component regfile
-		port(clk:          in  STD_LOGIC;
-				we3:           in  STD_LOGIC; -- write enable
-				ra1, ra2, wa3: in  STD_LOGIC_VECTOR(4 downto 0); -- read port 1, 2, write port
-				wd3:           in  STD_LOGIC_VECTOR(31 downto 0); -- data to write
-				rd1, rd2:      out STD_LOGIC_VECTOR(31 downto 0)); -- 
+  component regfile
+    port(clk:          in  STD_LOGIC;
+        we3:           in  STD_LOGIC; -- write enable
+        ra1, ra2, wa3: in  STD_LOGIC_VECTOR(4 downto 0); -- read port 1, 2, write port
+        wd3:           in  STD_LOGIC_VECTOR(31 downto 0); -- data to write
+        rd1, rd2:      out STD_LOGIC_VECTOR(31 downto 0)); --
   end component;
-  
-	component signext
-		port(a: in  STD_LOGIC_VECTOR(15 downto 0);
-				y: out STD_LOGIC_VECTOR(31 downto 0));
+
+  component signext
+    port(a: in  STD_LOGIC_VECTOR(15 downto 0);
+        y: out STD_LOGIC_VECTOR(31 downto 0));
   end component;
 
   signal s_PCplus4, s_RD1, s_RD2, s_signImmD: std_logic_vector(31 downto 0);
-  
+
   begin
     -- decodifica a instrucao
     reg_file: regfile port map (clock, regWriteW, instrD(25 downto 21), instrD(20 downto 16), writeRegW, resultW, s_RD1, s_RD2);
 
     sign_ext: signext port map (instrD(15 downto 0), s_signImmD);
-    
+
     s_PCplus4 <= PCplus4Din;
     PCplus4Dout <= s_PCplus4;
-    
+
     RD1 <= s_RD1;
-		RD2 <= s_RD2;
-		rsD <= instrD(25 downto 21);
-		rtD <= instrD(20 downto 16);
-		rdE <= instrD(15 downto 11);
+    RD2 <= s_RD2;
+    rsD <= instrD(25 downto 21);
+    rtD <= instrD(20 downto 16);
+    rdE <= instrD(15 downto 11);
     opcode <= instrD(31 downto 26);
     funct <= instrD(5 downto 0);
     signImmD <= s_signImmD;
   end;
 
-library IEEE; use IEEE.STD_LOGIC_1164.all; 
+library IEEE; use IEEE.STD_LOGIC_1164.all;
 
 entity regaux2 is
   port (
@@ -1052,48 +1098,48 @@ entity regaux2 is
     -- fluxo de dados:
       -- entradas
       PCplus4D:       in std_logic_vector(31 downto 0);
-      signImmD:       in std_logic_vector(31 downto 0); 
+      signImmD:       in std_logic_vector(31 downto 0);
       rd1D, rd2D:     in std_logic_vector(31 downto 0);
       rsD, rtD, rdD:  in std_logic_vector(4 downto 0);
       -- saidas
       PCplus4E:       out std_logic_vector(31 downto 0);
-      signImmE:       out std_logic_vector(31 downto 0); 
+      signImmE:       out std_logic_vector(31 downto 0);
       rd1E, rd2E:     out std_logic_vector(31 downto 0);
       rsE, rtE, rdE:  out std_logic_vector(4 downto 0);
     -- unidade de controle:
       -- entradas
       regWriteD:      in std_logic;
       memToRegD: 	    in std_logic;
-      memWriteD:      in std_logic; 
+      memWriteD:      in std_logic;
       branchD:        in std_logic;
       ALUControlD:		in std_logic_vector(2 downto 0);
       ALUSrcD: 		    in std_logic;
-			regDstD: 				in std_logic;
+      regDstD: 				in std_logic;
       -- saidas
       regWriteE:      out std_logic;
       memToRegE: 	    out std_logic;
-      memWriteE:      out std_logic; 
+      memWriteE:      out std_logic;
       branchE:        out std_logic;
       ALUControlE:		out std_logic_vector(2 downto 0);
       ALUSrcE: 		    out std_logic;
-			regDstE: 				out std_logic
+      regDstE: 				out std_logic
   );
 end;
 
-architecture struct of regaux2 is 
+architecture struct of regaux2 is
 
-	component floprEN generic(width: integer);
-		port(
+  component floprEN generic(width: integer);
+    port(
         clk, reset: 	in std_logic;
-				enable: 		in std_logic;
-				d:          		in std_logic_vector(width-1 downto 0);
-				q:          		out std_logic_vector(width-1 downto 0));
-	end component;
-  
+        enable: 		in std_logic;
+        d:          		in std_logic_vector(width-1 downto 0);
+        q:          		out std_logic_vector(width-1 downto 0));
+  end component;
+
   signal s_rdE, s_rdE_aux: std_logic_vector(63 downto 0);
   signal s_rstdE, s_rstdE_aux: std_logic_vector(14 downto 0);
   signal s_ucE, s_ucE_aux: std_logic_vector(8 downto 0);
-  
+
   begin
   reg_rd1: floprEN generic map (32)
   port map(clock, flushE, '1', rd1D, rd1E);
@@ -1103,38 +1149,38 @@ architecture struct of regaux2 is
 
   -- rs, rt e rd
   s_rstdE_aux <= rsD & rtD & rdD;
-  
+
   reg_rstd: floprEN	generic map (15)
-    port map(clock, flushE, '1', s_rstdE_aux, s_rstdE);     
-  
-  -- signImm 
+    port map(clock, flushE, '1', s_rstdE_aux, s_rstdE);
+
+  -- signImm
   reg_sig: floprEN generic map (32)
     port map(clock, flushE, '1', signImmD, signImmE);
-  
+
   -- PCplus4
   reg_PCplus4: floprEN generic map (32)
     port map(clock, flushE, '1', PCplus4D, PCplus4E);
-  
-  -- sinais da UC   
+
+  -- sinais da UC
   s_ucE_aux <= regWriteD & memToRegD & memWriteD & branchD & ALUControlD & ALUSrcD & regDstD;
-  
-  regUC: floprEN generic map (9) 
-	port map(clock, flushE, '1', s_ucE_aux, s_ucE);
+
+  regUC: floprEN generic map (9)
+  port map(clock, flushE, '1', s_ucE_aux, s_ucE);
 
   -- separação de sinais que foram colapsados
-	rsE <= s_rstdE(14 downto 10);
-	rtE <= s_rstdE(9 downto 5);
+  rsE <= s_rstdE(14 downto 10);
+  rtE <= s_rstdE(9 downto 5);
   rdE <= s_rstdE(4 downto 0);
   regWriteE <= s_ucE(8);
-  memToRegE <= s_ucE(7);	
+  memToRegE <= s_ucE(7);
   memWriteE <= s_ucE(6);
-  branchE <= s_ucE(5);   
+  branchE <= s_ucE(5);
   ALUControlE <= ALUControlD;
   ALUSrcE	<= s_ucE(1);
-  regDstE <= s_ucE(0);			
+  regDstE <= s_ucE(0);
   end;
 
-library IEEE; use IEEE.STD_LOGIC_1164.all; 
+library IEEE; use IEEE.STD_LOGIC_1164.all;
 
 entity execute is
   port (
@@ -1162,18 +1208,18 @@ entity execute is
 end;
 
 architecture struct of execute is
-  
+
   component alu
-		port(a, b:       in  STD_LOGIC_VECTOR(31 downto 0);
-				alucontrol: in  STD_LOGIC_VECTOR(2 downto 0);
-				result:     buffer STD_LOGIC_VECTOR(31 downto 0);
-				zero:       out STD_LOGIC);
+    port(a, b:       in  STD_LOGIC_VECTOR(31 downto 0);
+        alucontrol: in  STD_LOGIC_VECTOR(2 downto 0);
+        result:     buffer STD_LOGIC_VECTOR(31 downto 0);
+        zero:       out STD_LOGIC);
   end component;
-  
-	component mux2 generic(width: integer);
-		port(d0, d1: in  STD_LOGIC_VECTOR(width-1 downto 0);
-				s:      in  STD_LOGIC;
-				y:      out STD_LOGIC_VECTOR(width-1 downto 0));
+
+  component mux2 generic(width: integer);
+    port(d0, d1: in  STD_LOGIC_VECTOR(width-1 downto 0);
+        s:      in  STD_LOGIC;
+        y:      out STD_LOGIC_VECTOR(width-1 downto 0));
   end component;
 
   component adder
@@ -1181,9 +1227,9 @@ architecture struct of execute is
         y:    out std_logic_vector(31 downto 0));
   end component;
 
-	component sl2
-		port(a: in  STD_LOGIC_VECTOR(31 downto 0);
-				y: out STD_LOGIC_VECTOR(31 downto 0));
+  component sl2
+    port(a: in  STD_LOGIC_VECTOR(31 downto 0);
+        y: out STD_LOGIC_VECTOR(31 downto 0));
   end component;
 
   component mux3 is generic(width: integer);
@@ -1191,7 +1237,7 @@ architecture struct of execute is
        s:      in  STD_LOGIC_VECTOR(1 downto 0);
        y:      out STD_LOGIC_VECTOR(width-1 downto 0));
   end component;
-  
+
   signal s_writeDataE, s_srcAE, s_srcBE, s_SL2out: std_logic_vector(31 downto 0);
 
   begin
@@ -1206,16 +1252,16 @@ architecture struct of execute is
     shiftl2: sl2 port map (signImmE, s_SL2out);
 
     add: adder port map (s_SL2out, PCplus4E, PCbranchE);
-    
-    mux_forwA: mux3 generic map (32) 
+
+    mux_forwA: mux3 generic map (32)
       port map (rd1E, resultW, ALUOutM, forwardAE, s_srcAE);
 
-    mux_forwB: mux3 generic map (32) 
+    mux_forwB: mux3 generic map (32)
       port map (rd2E, resultW, ALUOutM, forwardBE, s_writeDataE);
 
 end;
 
-library IEEE; use IEEE.STD_LOGIC_1164.all; 
+library IEEE; use IEEE.STD_LOGIC_1164.all;
 
 entity regaux3 is
   port (
@@ -1237,12 +1283,12 @@ entity regaux3 is
     -- entradas
     regWriteE:      in std_logic;
     memToRegE: 	    in std_logic;
-    memWriteE:      in std_logic; 
+    memWriteE:      in std_logic;
     branchE:        in std_logic;
     -- saidas
     regWriteM:      out std_logic;
     memToRegM: 	    out std_logic;
-    memWriteM:      out std_logic; 
+    memWriteM:      out std_logic;
     branchM:        out std_logic
   );
 
@@ -1250,13 +1296,13 @@ end;
 
 architecture struct of regaux3 is
 
-	component floprEN generic(width: integer);
-		port(clk, reset: 	in STD_LOGIC;
-				enable: 	in STD_LOGIC;
-				d:          in STD_LOGIC_VECTOR(width-1 downto 0);
-				q:          out STD_LOGIC_VECTOR(width-1 downto 0));
-	end component;  
-  
+  component floprEN generic(width: integer);
+    port(clk, reset: 	in STD_LOGIC;
+        enable: 	in STD_LOGIC;
+        d:          in STD_LOGIC_VECTOR(width-1 downto 0);
+        q:          out STD_LOGIC_VECTOR(width-1 downto 0));
+  end component;
+
   signal s_FD, s_FD_aux: std_logic_vector(5 downto 0);
   signal s_UC, s_UC_aux: std_logic_vector(3 downto 0);
 
@@ -1265,7 +1311,7 @@ architecture struct of regaux3 is
 
   reg_zero_wReg: floprEN generic map(6)
     port map(clock, clear, '1', s_FD_aux, s_FD);
-  
+
   reg_ALUout: floprEN generic map(32)
     port map(clock, clear, '1', ALUOutE, ALUoutM);
 
@@ -1275,21 +1321,21 @@ architecture struct of regaux3 is
   reg_PCbranch: floprEN generic map(32)
     port map(clock, clear, '1', PCbranchE, PCbranchM);
 
-	s_UC_aux <= regWriteE & memToRegE & memWriteE & branchE;
-    
-	reg_UC: floprEN generic map(4)
+  s_UC_aux <= regWriteE & memToRegE & memWriteE & branchE;
+
+  reg_UC: floprEN generic map(4)
       port map(clock, clear, '1', s_UC_aux, s_UC);
-	  
-	zeroM <= s_FD(5);
+
+  zeroM <= s_FD(5);
     writeRegM <= s_FD(4 downto 0);
-	
+
     regWriteM <= s_UC(3);
     memToRegM <= s_UC(2);
     memWriteM <= s_UC(1);
-    branchM <= s_UC(0); 
+    branchM <= s_UC(0);
   end;
 
-library IEEE; use IEEE.STD_LOGIC_1164.all; 
+library IEEE; use IEEE.STD_LOGIC_1164.all;
 
 entity memory is
   port (
@@ -1305,19 +1351,19 @@ entity memory is
     -- saidas
       ALUOutW:        out std_logic_vector(31 downto 0);
       rdM:            out std_logic_vector(31 downto 0);
-      writeRegW:      out std_logic_vector(4 downto 0); 
+      writeRegW:      out std_logic_vector(4 downto 0);
       PCbranchF:      out std_logic_vector(31 downto 0)
   );
 end;
 
 architecture struct of memory is
 
-	component dmem
-		port(clk, we:  in STD_LOGIC;
-				a, wd:    in STD_LOGIC_VECTOR(31 downto 0);
-				rd:       out STD_LOGIC_VECTOR(31 downto 0));
-	end component;
-  
+  component dmem
+    port(clk, we:  in STD_LOGIC;
+        a, wd:    in STD_LOGIC_VECTOR(31 downto 0);
+        rd:       out STD_LOGIC_VECTOR(31 downto 0));
+  end component;
+
   signal s_PCbranch, s_ALUout: std_logic_vector(31 downto 0);
   signal s_writeReg: std_logic_vector(4 downto 0);
 
@@ -1334,7 +1380,7 @@ architecture struct of memory is
     writeRegW <= s_writeReg;
   end;
 
-library IEEE; use IEEE.STD_LOGIC_1164.all; 
+library IEEE; use IEEE.STD_LOGIC_1164.all;
 
 entity regaux4 is
   port (
@@ -1343,11 +1389,11 @@ entity regaux4 is
     -- entradas
     ALUOutM:        in std_logic_vector(31 downto 0);
     rdM:            in std_logic_vector(31 downto 0);
-    writeRegM:      in std_logic_vector(4 downto 0); 
+    writeRegM:      in std_logic_vector(4 downto 0);
     -- saidas
     ALUOutW:        out std_logic_vector(31 downto 0);
     readDataW:      out std_logic_vector(31 downto 0);
-    writeRegW:      out std_logic_vector(4 downto 0); 
+    writeRegW:      out std_logic_vector(4 downto 0);
   -- unidade de controle
     -- entradas
     regWriteM:      in std_logic;
@@ -1361,35 +1407,35 @@ end;
 
 architecture struct of regaux4 is
 
-	component floprEN generic(width: integer);
-		port(clk, reset: 	in STD_LOGIC;
-				enable: 		in STD_LOGIC;
-				d:          		in STD_LOGIC_VECTOR(width-1 downto 0);
-				q:          		out STD_LOGIC_VECTOR(width-1 downto 0));
-	end component;  
-  
+  component floprEN generic(width: integer);
+    port(clk, reset: 	in STD_LOGIC;
+        enable: 		in STD_LOGIC;
+        d:          		in STD_LOGIC_VECTOR(width-1 downto 0);
+        q:          		out STD_LOGIC_VECTOR(width-1 downto 0));
+  end component;
+
   signal s_UC, s_UC_aux: std_logic_vector(1 downto 0);
 
   begin
     reg_FD1: floprEN 	generic map(32)
-		port map(clock, clear, '1', ALUOutM, ALUoutW);
-		
-    reg_FD2: floprEN 	generic map(32)
-		port map(clock, clear, '1', rdM, readDataW);
-		
-    reg_FD3: floprEN 	generic map(5)
-		port map(clock, clear, '1', writeRegM, writeRegW);
+    port map(clock, clear, '1', ALUOutM, ALUoutW);
 
-	s_UC_aux <= regWriteM & memToRegM;
-	
+    reg_FD2: floprEN 	generic map(32)
+    port map(clock, clear, '1', rdM, readDataW);
+
+    reg_FD3: floprEN 	generic map(5)
+    port map(clock, clear, '1', writeRegM, writeRegW);
+
+  s_UC_aux <= regWriteM & memToRegM;
+
     reg_UC: floprEN 	generic map(2)
-		port map(clock, clear, '1', s_UC_aux, s_UC);
-    
+    port map(clock, clear, '1', s_UC_aux, s_UC);
+
     regWriteW <= s_UC(1);
     memToRegW <= s_UC(0);
   end;
 
-library IEEE; use IEEE.STD_LOGIC_1164.all; 
+library IEEE; use IEEE.STD_LOGIC_1164.all;
 
 entity writeback is
   port (
@@ -1398,7 +1444,7 @@ entity writeback is
       -- fluxo de dados:
       ALUOutW:        in std_logic_vector(31 downto 0);
       readDataW:      in std_logic_vector(31 downto 0);
-      writeRegW_in:   in std_logic_vector(4 downto 0);       
+      writeRegW_in:   in std_logic_vector(4 downto 0);
       -- unidade de controle:
       memToRegW: 	    in std_logic;
     -- saidas
@@ -1408,19 +1454,19 @@ entity writeback is
 end;
 
 architecture struct of writeback is
-  
+
   component mux2 generic(width: integer);
-		port(d0, d1: in  std_logic_vector(width-1 downto 0);
-				s:      in  std_logic;
-				y:      out std_logic_vector(width-1 downto 0));
+    port(d0, d1: in  std_logic_vector(width-1 downto 0);
+        s:      in  std_logic;
+        y:      out std_logic_vector(width-1 downto 0));
   end component;
 
   begin
     mux_result: mux2 generic map(32) port map (ALUOutW, readDataW, memToRegW, resultW);
-	  writeRegW_out <= writeRegW_in;
+    writeRegW_out <= writeRegW_in;
   end;
 
-library IEEE; use IEEE.STD_LOGIC_1164.all; 
+library IEEE; use IEEE.STD_LOGIC_1164.all;
 use IEEE.NUMERIC_STD_UNSIGNED.all;
 
 entity forwarding is
@@ -1428,6 +1474,7 @@ entity forwarding is
     rsE, rtE:               in std_logic_vector (4 downto 0);
     writeRegM, writeRegW:   in std_logic_vector (4 downto 0);
     regWriteM, regWriteW:   in std_logic;
+
     forwardAE, forwardBE:   out std_logic_vector (1 downto 0)
   );
 end;
@@ -1440,26 +1487,28 @@ architecture behave of forwarding is
         forwardAE <= "10";
       elsif rsE /= "0000" and rsE = writeregW and regWriteW = '1' then
         forwardAE <= "01";
-      else 
+      else
         forwardAE <= "00";
       end if;
+
       if rtE /= "0000" and rtE = writeregM and regWriteM = '1' then
         forwardBE <= "10";
       elsif rtE /= "0000" and rtE = writeregW and regWriteW = '1' then
         forwardBE <= "01";
-      else 
+      else
         forwardBE <= "00";
-      end if;   
-	  end process;
+      end if;
+    end process;
   end;
 
-library IEEE; use IEEE.STD_LOGIC_1164.all; 
+library IEEE; use IEEE.STD_LOGIC_1164.all;
 use IEEE.NUMERIC_STD_UNSIGNED.all;
 
 entity stall_unit is
   port (
     rsD, rtD, rtE:            in std_logic_vector (4 downto 0);
     memToRegE:                in std_logic;
+
     stallF, stallD, flushE:   out std_logic
   );
 end;
@@ -1478,15 +1527,15 @@ architecture behave of stall_unit is
       stallF <= lwstall;
       stallD <= lwstall;
       flushE <= lwstall;
-	
-	end process;
+
+  end process;
 end;
 
 library IEEE; use IEEE.STD_LOGIC_1164.all; use IEEE.STD_LOGIC_ARITH.all;
 
 entity jump_unit is
   port(
-    register1:  in  STD_LOGIC_VECTOR(31 downto 0); 
+    register1:  in  STD_LOGIC_VECTOR(31 downto 0);
     register2:  in  STD_LOGIC_VECTOR(31 downto 0);
     equal: out STD_LOGIC);
 end entity jump_unit;
@@ -1494,6 +1543,6 @@ end entity jump_unit;
 architecture behavioral of jump_unit is
 
 begin
-  equal <= '1' when (register1 = register2) 
+  equal <= '1' when (register1 = register2)
         else '0';
 end architecture behavioral;
